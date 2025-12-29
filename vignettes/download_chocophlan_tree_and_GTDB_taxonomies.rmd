@@ -1,0 +1,185 @@
+---
+title: "Fetch phylogenetic trees for metaphlan phylogenetic studies"
+author: Giacomo Antonello
+output: 
+  html_document:
+    toc: true
+---
+
+```{r setup, message=FALSE, warning=FALSE}
+library(zen4R)
+library(knitr)
+library(tools)
+library(ape)
+
+opts_chunk$set(
+  message = FALSE, 
+  warning = FALSE
+)
+
+mpa_doi <- "https://doi.org/10.5281/zenodo.3965462"
+
+outdir <- "../tmp/metaphlan_downloads"
+dir.create(outdir, recursive = TRUE)
+```
+
+# List all Zenodo entries of MetaPhlAn
+
+```{r}
+# download all version of the main metaphlan zenodo entry
+zenodo_versions_with_doi <- get_versions(mpa_doi)
+
+# subset only relevant dates, date entered and last modified are less relevant
+zenodo_versions_with_doi <- zenodo_versions_with_doi[, c("date", "version", "doi")]
+
+# remove beta and test versions
+zenodo_versions_with_doi <- zenodo_versions_with_doi[!grepl("beta|test", zenodo_versions_with_doi$version),]
+
+# remove duplicated rows, in case edits were made, but we only care 
+# about the latest
+zenodo_versions_with_doi <- zenodo_versions_with_doi[!duplicated(zenodo_versions_with_doi$doi),] 
+
+# reorder from latest to oldest
+zenodo_versions_with_doi <-  zenodo_versions_with_doi[rev(order(zenodo_versions_with_doi$date)), ]
+
+rownames(zenodo_versions_with_doi) <- seq_len(nrow(zenodo_versions_with_doi))
+kable(zenodo_versions_with_doi)
+```
+
+# Download and unzip all versions from 3.0 to the latest (\~ 3 min)
+
+```{r, message=FALSE}
+# download sequentially
+for(i in seq_len(nrow(zenodo_versions_with_doi))){
+  if(i %% 8 == 0){
+    Sys.sleep(30)
+  }
+  invisible(download_zenodo(doi = zenodo_versions_with_doi$doi[i], path = file.path(outdir)))
+}
+
+# unzip in block
+invisible(sapply(list.files(outdir, pattern = "*.zip", full.names = TRUE), function(x)
+  unzip(
+    zipfile = x,
+    overwrite = TRUE,
+    exdir = gsub(".zip", "", x)
+  )))
+```
+
+# Download tree exception from cmprod into the 3.1 version
+
+```{r, warning=FALSE}
+# newick tree for metaphlan v 3.1.0:
+invisible(download.file("http://cmprod1.cibio.unitn.it/biobakery3/mpa_v31_CHOCOPhlAn_201901_species_tree.nwk", destfile = file.path(outdir, "MetaPhlAn-3.1.0", "mpa_v31_CHOCOPhlAn_201901_species_tree.nwk")))
+
+# newick tree for metaphlan v 4.2.0 and above
+invisible(download.file("http://cmprod1.cibio.unitn.it/biobakery4/metaphlan_databases/mpa_vJan25_CHOCOPhlAnSGB_202503.nwk", destfile = file.path(outdir, "MetaPhlAn-4.2.0", "mpa_vJan25_CHOCOPhlAnSGB_202503.nwk")))
+```
+
+# Find all files with `.nwk` file extension
+
+```{r}
+trees.vec <- list.files(outdir, pattern = "*.nwk", recursive = TRUE, full.names = TRUE)
+trees.md5sum <- md5sum(trees.vec)
+trees.split.list <- strsplit(trees.vec, "/", fixed = TRUE)
+
+# for each tree, find number of leaves/tips
+
+trees_ape_read <- lapply(trees.vec, read.tree)
+
+trees.df <- data.frame(
+  filePath = trees.vec,
+  tree_filename = basename(trees.vec), 
+  MetaPhlAn_version = sapply(trees.split.list, function(x) gsub("MetaPhlAn-", "", x[4], fixed = TRUE)),
+  tree_Ntips = sapply(trees_ape_read,  Ntip),
+  md5sum = trees.md5sum
+  )
+
+rownames(trees.df) <- NULL
+```
+
+Manually prune incorrect 3.1.0 tree, the correct one is downloaded from `cmprod`
+
+```{r}
+trees.df <- trees.df[!(trees.df$MetaPhlAn_version == "3.1.0" & trees.df$tree_filename == "mpa_v30_CHOCOPhlAn_201901_species_tree.nwk"),]
+```
+
+# Move unique tree files and their map into `inst/extdata`
+
+```{r}
+destdir <- "../inst/extdata/trees"
+dir.create(destdir, recursive = TRUE)
+
+for(i in seq_len(nrow(trees.df))){
+  if(!file.exists(file.path(destdir, trees.df$tree_filename[i]))){
+    file.copy(trees.df$filePath[i], file.path(destdir, trees.df$tree_filename[i]))
+  }
+}
+
+write.table(trees.df[,-1], file = file.path(destdir, "trees_files_directory.tsv"), sep = "\t", row.names = FALSE, col.names = TRUE, quote = FALSE)
+```
+
+# Copy GTDB files
+
+```{r}
+GTDBs.vec <- list.files(outdir, pattern = "*GTDB.*", recursive = TRUE, full.names = TRUE)
+GTDBs.md5sum <- md5sum(GTDBs.vec)
+
+GTDBs.split.list <- strsplit(GTDBs.vec, "/")
+
+GTDBs.df <- data.frame(
+  filePath = GTDBs.vec,
+  GTDB_filename = basename(GTDBs.vec), 
+  MetaPhlAn_version = sapply(GTDBs.split.list, function(x) gsub("MetaPhlAn-", "", x[4], fixed = TRUE)),
+  md5sum = GTDBs.md5sum
+)
+
+GTDBs.df_unique <- GTDBs.df[,c("GTDB_filename", "md5sum")]
+GTDBs.df_unique <- GTDBs.df_unique[!duplicated(GTDBs.df_unique),]
+```
+
+Load and wrangle GTDB files
+
+```{r}
+files_raw <- lapply(rownames(GTDBs.df_unique), read.delim, col.names = c("SGB", "taxonomy_long"))
+names(files_raw) <- GTDBs.df_unique$GTDB_filename
+
+files_clean <- lapply(files_raw, function(x){
+  x2 <- do.call(rbind, strsplit(x[[2]], ";"))
+  x3 <- cbind.data.frame(x2, x[[1]])
+  colnames(x3) <- c("Domain", "Phylum", "Class", "Order", "Family", "Genus", "Species", "SGB")
+  return(as.data.frame(x3))
+})
+```
+
+Write GTDB files
+
+```{r}
+destdir <- "../inst/extdata/GTDB"
+
+dir.create(destdir, recursive = TRUE)
+invisible(lapply(names(files_clean), function(filename)
+  write.table(
+    files_clean[[filename]],
+    file = file.path(
+      destdir,
+      filename),
+      sep = "\t",
+      row.names = FALSE
+    )
+  ))
+
+write.table(x = GTDBs.df_unique, file = file.path(destdir, "GTDB_files_directory.tsv"), sep = "\t", row.names = FALSE)
+```
+
+# Remove temporary files
+
+```{r}
+unlink("../tmp/", recursive = TRUE)
+```
+
+# sessionInfo
+
+```{r}
+sessionInfo()
+```
