@@ -1,16 +1,17 @@
 ---
-title: "Fetch phylogenetic trees for metaphlan phylogenetic studies"
-author: Giacomo Antonello
+title: "Untitled"
+author: "Giacomo Antonello"
+date: "2025-12-29"
 output: 
   html_document:
     toc: true
 ---
 
 ```{r setup, message=FALSE, warning=FALSE}
-library(zen4R)
-library(knitr)
-library(tools)
-library(ape)
+library(zen4R) # Zenodo API for R
+library(knitr) 
+library(tools) # to unzip downloaded files
+library(ape) # to manipulated phylogenetic trees
 
 opts_chunk$set(
   message = FALSE, 
@@ -48,7 +49,7 @@ kable(zenodo_versions_with_doi)
 
 # Download and unzip all versions from 3.0 to the latest (\~ 3 min)
 
-```{r, message=FALSE}
+```{r, message=FALSE, eval=interactive()}
 # download sequentially
 for(i in seq_len(nrow(zenodo_versions_with_doi))){
   if(i %% 8 == 0){
@@ -112,7 +113,7 @@ dir.create(destdir, recursive = TRUE)
 
 for(i in seq_len(nrow(trees.df))){
   if(!file.exists(file.path(destdir, trees.df$tree_filename[i]))){
-    file.copy(trees.df$filePath[i], file.path(destdir, trees.df$tree_filename[i]))
+      file.copy(trees.df$filePath[i], file.path(destdir, trees.df$tree_filename[i]))
   }
 }
 
@@ -170,12 +171,6 @@ invisible(lapply(names(files_clean), function(filename)
   ))
 
 write.table(x = GTDBs.df_unique, file = file.path(destdir, "GTDB_files_directory.tsv"), sep = "\t", row.names = FALSE)
-```
-
-# Remove temporary files
-
-```{r}
-unlink("../tmp/", recursive = TRUE)
 ```
 
 # sessionInfo
