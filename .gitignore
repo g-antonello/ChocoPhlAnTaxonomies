@@ -50,3 +50,6 @@ rsconnect/
 
 # Ignore macintosh temp file
 .DS_Store
+
+# ignore files in the tmp folder
+tmp
