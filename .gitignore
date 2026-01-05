@@ -1,3 +1,7 @@
+# Github hidden files
+.gitmodules
+
+
 # History files
 .Rhistory
 .Rapp.history
