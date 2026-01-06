@@ -1,0 +1,23 @@
+Package: ChocoPhlAnTaxonomies
+Type: Package
+Title: ChocoPhlAn taxonomies, trees and tables
+Version: 0.1.0
+Authors@R: person("Giacomo", "Antonello",
+                  email = "giacomoantonello1@gmail.com",
+                  role = c("aut", "cre"))
+Description: A uniform and public source of taxonomy and phylogenetic trees from 
+	publicly available ChocoPhlAn version
+Depends:
+    R (>= 4.1.0)
+Imports:
+    ape,
+    tidytree,
+    TreeSummarizedExperiment
+Suggests:
+    testthat (>= 3.0.0)
+License: GPL-3 + file LICENSE
+Encoding: UTF-8
+LazyData: true
+RoxygenNote: 7.3.3
+Config/testthat/edition: 3
+
