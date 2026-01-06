@@ -1,5 +1,5 @@
 ---
-title: "Untitled"
+title: "Download and prepare taxonomy files (trees and GTDB taxonomies)"
 author: "Giacomo Antonello"
 date: "2025-12-29"
 output: 
@@ -22,6 +22,17 @@ mpa_doi <- "https://doi.org/10.5281/zenodo.3965462"
 
 outdir <- "../tmp/metaphlan_downloads"
 dir.create(outdir, recursive = TRUE)
+```
+
+# Download latest standard taxonomy from `cmprod1`
+
+```{r}
+cmprod_url <- "http://cmprod1.cibio.unitn.it/biobakery4/metaphlan_databases"
+mpa_latest <- readLines(sprintf("%s/mpa_latest", cmprod_url))
+
+download.file(url = sprintf("%s/%s_species.txt.bz2", cmprod_url, mpa_latest), destfile = file.path("..", "inst", "extdata", paste0(mpa_latest, "_speciesTaxonomy.tsv.bz2")))
+
+latest_mpa_taxonomy <- read.delim(file.path("..", "inst", "extdata", paste0(mpa_latest, "_speciesTaxonomy.tsv.bz2")), header = FALSE, col.names = c("SGB", "Taxonomy"))
 ```
 
 # List all Zenodo entries of MetaPhlAn
@@ -113,11 +124,39 @@ dir.create(destdir, recursive = TRUE)
 
 for(i in seq_len(nrow(trees.df))){
   if(!file.exists(file.path(destdir, trees.df$tree_filename[i]))){
-      file.copy(trees.df$filePath[i], file.path(destdir, trees.df$tree_filename[i]))
+      file.copy(trees.df$filePath[i], file.path(destdir, trees.df$tree_filename[i]), overwrite = TRUE)
   }
 }
 
 write.table(trees.df[,-1], file = file.path(destdir, "trees_files_directory.tsv"), sep = "\t", row.names = FALSE, col.names = TRUE, quote = FALSE)
+```
+
+# Format newly copied trees to have tips as complete as possible
+
+```{r}
+phyloTrees.paths <- list.files(destdir, pattern = "*.nwk", full.names = TRUE)
+names(phyloTrees.paths) <- basename(phyloTrees.paths)
+
+trees.list <- lapply(phyloTrees.paths, ape::read.tree)
+
+# taxonomy as vector
+latest_mpa_taxonomy.chr <- paste0(latest_mpa_taxonomy$Taxonomy, "|", "t__", latest_mpa_taxonomy$SGB)
+names(latest_mpa_taxonomy.chr) <- paste0("t__", latest_mpa_taxonomy$SGB)
+
+trees_improved_taxonomy.list <- lapply(trees.list, function(x) {
+  if(!any(grepl("__", x$tip.label))){
+    SGBLabels <- paste0("t__SGB", x$tip.label)
+    x$tip.label <- latest_mpa_taxonomy.chr[SGBLabels]
+    return(x)
+  } else{
+    return(x)
+  }
+}
+)
+
+for(pt in unname(phyloTrees.paths)){
+  write.tree(phy = trees_improved_taxonomy.list[[basename(pt)]], file = pt)
+}
 ```
 
 # Copy GTDB files
