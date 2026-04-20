@@ -1,3 +1,59 @@
+#' Get SGB taxonomy
+#' 
+#' Given a SGB, it returns a character vector of its full taxonomy
+#' from either the standard metaphlan or the GTDB taxonomy.
+#'  
+#' @param SGB \code{character} of the SGB to get the full taxonomy of
+#' @param taxonomy 
+#' @param chocophlan_datestamp 
+#'
+#' @returns
+#' @export
+#'
+#' @examples
+#' # example with GDTB 202403, which shows no difference from 202307
+#' # this is to show the behavior of `validate_mpa_version`.
+#' 
+#' get_sgb_taxonomy("SGB8271", "mpa", chocophlan_datestamp = "202403")
+#' get_sgb_taxonomy("t__SGB8271", "mpa", chocophlan_datestamp = "202403")
+#' get_sgb_taxonomy("SGB8271", "GTDB", chocophlan_datestamp = "202403")
+#' get_sgb_taxonomy("t__SGB8271", "GTDB", chocophlan_datestamp = "202403")
+
+get_sgb_taxonomy <- function(SGB, taxonomy = "mpa", chocophlan_datestamp = "202403"){
+  mpa_latest <- get_mpa_latest()
+  chocophlan_datestamp <- validate_mpa_version(chocophlan_datestamp)
+  
+  # strip t__ in case there is one in the SGB to look up the taxonomy of
+  SGB_lookup <- gsub("t__", "", SGB)
+  
+  # use latest mpa taxonomy table to look up the full taxonomy name 
+  if (taxonomy == "mpa") {
+    # Check the datestamp of the latest taxonomy and the wanted one
+    if(chocophlan_datestamp != mpa_latest$datestamp){
+      warning(sprintf("Taxonomy version '%s' requested, but '%s' is used for lookup", chocophlan_datestamp, mpa_latest$datestamp))
+    }
+    
+    taxonomy_path <- system.file("extdata", sprintf("%s_speciesTaxonomy.tsv.bz2", mpa_latest$name), package = "ChocoPhlAnTaxonomies")
+    taxonomy.df <- read.delim(taxonomy_path, header = FALSE)
+    SGB_lookedUp <- paste(taxonomy.df[[2]][taxonomy.df[[1]] == SGB_lookup], paste0("t__", SGB_lookup), sep = "|")
+    
+    return(SGB_lookedUp)
+  }
+  
+  if(taxonomy == "GTDB"){
+    taxonomy_path <- grep(chocophlan_datestamp, list.files(system.file("extdata/GTDB/", package = "ChocoPhlAnTaxonomies"), full.names = TRUE), value = TRUE)
+    # The GTDB taxonomy is cleaner, because it's split into Domain, Phylum, ..., Species, SGB
+    # but
+    taxonomy.df <- read.delim(taxonomy_path)
+    SGB_lookedUp <- taxonomy.df[taxonomy.df$SGB == SGB_lookup,]
+    SGB_lookedUp$SGB <- paste0("t__", SGB_lookedUp$SGB)
+    SGB_lookedUp <- paste(unlist(SGB_lookedUp), collapse = "|")
+    return(SGB_lookedUp)
+  }
+}
+
+
+
 
 ###############################
 ### OLD FUNCTIONS

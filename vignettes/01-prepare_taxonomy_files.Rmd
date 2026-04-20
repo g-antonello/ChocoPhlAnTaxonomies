@@ -1,0 +1,230 @@
+---
+title: "Download and prepare taxonomy files (trees and GTDB taxonomies)"
+author: "Giacomo Antonello"
+date: "2025-12-29"
+output: 
+  html_document:
+    toc: true
+---
+
+```{r setup, message=FALSE, warning=FALSE}
+library(zen4R) # Zenodo API for R
+library(knitr) 
+library(tools) # md5sum
+library(ape)   # read.tree, write.tree, Ntip
+
+opts_chunk$set(
+  message = FALSE, 
+  warning = FALSE
+)
+
+mpa_doi <- "https://doi.org/10.5281/zenodo.3965462"
+
+outdir <- "../tmp/metaphlan_downloads"
+dir.create(outdir, recursive = TRUE)
+```
+
+# Download latest standard taxonomy from `cmprod1`
+
+The latest MetaPhlAn database name is retrieved from the `mpa_latest` pointer file on
+the CIBIO server. The corresponding species taxonomy file maps each SGB identifier to its
+full MetaPhlAn taxonomy string and is stored compressed in `inst/extdata`.
+
+```{r}
+cmprod_url <- "http://cmprod1.cibio.unitn.it/biobakery4/metaphlan_databases"
+mpa_latest <- readLines(sprintf("%s/mpa_latest", cmprod_url))
+
+download.file(
+  url      = sprintf("%s/%s_species.txt.bz2", cmprod_url, mpa_latest),
+  destfile = file.path("..", "inst", "extdata", paste0(mpa_latest, "_speciesTaxonomy.tsv.bz2"))
+)
+
+latest_mpa_taxonomy <- read.delim(
+  file.path("..", "inst", "extdata", paste0(mpa_latest, "_speciesTaxonomy.tsv.bz2")),
+  header    = FALSE,
+  col.names = c("SGB", "Taxonomy")
+)
+```
+
+# List all Zenodo entries of MetaPhlAn
+
+All public versions of the MetaPhlAn database are archived on Zenodo. We retrieve
+the full version history, drop development releases (beta/test), deduplicate by DOI
+(keeping only the latest edit of each release), and sort newest-first.
+
+```{r}
+zenodo_versions_with_doi <- get_versions(mpa_doi)
+
+zenodo_versions_with_doi <- zenodo_versions_with_doi[, c("date", "version", "doi")]
+zenodo_versions_with_doi <- zenodo_versions_with_doi[!grepl("beta|test", zenodo_versions_with_doi$version), ]
+zenodo_versions_with_doi <- zenodo_versions_with_doi[!duplicated(zenodo_versions_with_doi$doi), ]
+zenodo_versions_with_doi <- zenodo_versions_with_doi[rev(order(zenodo_versions_with_doi$date)), ]
+rownames(zenodo_versions_with_doi) <- seq_len(nrow(zenodo_versions_with_doi))
+
+kable(zenodo_versions_with_doi)
+```
+
+# Download and unzip all versions from 3.0 to the latest (~3 min)
+
+Downloads are throttled (30 s pause every 8 requests) to stay within Zenodo's rate
+limits. Each zip is extracted into a same-named subdirectory of `outdir`.
+
+```{r, cache=TRUE, message=FALSE, eval=!interactive()}
+for (i in seq_len(nrow(zenodo_versions_with_doi))) {
+  if (i %% 8 == 0) Sys.sleep(30)
+  download_zenodo(doi = zenodo_versions_with_doi$doi[i], path = outdir)
+}
+
+invisible(sapply(
+  list.files(outdir, pattern = "\\.zip$", full.names = TRUE),
+  function(x) unzip(zipfile = x, overwrite = TRUE, exdir = gsub("\\.zip$", "", x))
+))
+```
+
+# Download tree exceptions from `cmprod`
+
+Two trees are not available via Zenodo and must be fetched directly from the CIBIO
+server: the corrected v3.1 tree (the Zenodo archive ships the v3.0 tree for that
+release) and the latest v4.2+ tree.
+
+```{r, warning=FALSE}
+download.file(
+  "http://cmprod1.cibio.unitn.it/biobakery3/mpa_v31_CHOCOPhlAn_201901_species_tree.nwk",
+  destfile = file.path(outdir, "MetaPhlAn-3.1.0", "mpa_v31_CHOCOPhlAn_201901_species_tree.nwk")
+)
+
+download.file(
+  "http://cmprod1.cibio.unitn.it/biobakery4/metaphlan_databases/mpa_vJan25_CHOCOPhlAnSGB_202503.nwk",
+  destfile = file.path(outdir, "MetaPhlAn-4.2.0", "mpa_vJan25_CHOCOPhlAnSGB_202503.nwk")
+)
+```
+
+# Find all `.nwk` tree files and build a directory table
+
+```{r}
+trees.vec        <- list.files(outdir, pattern = "\\.nwk$", recursive = TRUE, full.names = TRUE)
+trees.md5sum     <- md5sum(trees.vec)
+trees.split.list <- strsplit(trees.vec, "/", fixed = TRUE)
+trees.list       <- lapply(trees.vec, read.tree)
+names(trees.list) <- basename(trees.vec)
+
+trees.df <- data.frame(
+  filePath          = trees.vec,
+  tree_filename     = basename(trees.vec),
+  MetaPhlAn_version = sapply(trees.split.list, function(x) gsub("MetaPhlAn-", "", x[4], fixed = TRUE)),
+  tree_Ntips        = sapply(trees.list, Ntip),
+  md5sum            = trees.md5sum,
+  row.names         = NULL
+)
+```
+
+Remove the incorrect v3.1.0 tree (Zenodo ships the v3.0 tree for that release; the
+correct one was downloaded above from `cmprod`).
+
+```{r}
+trees.df <- trees.df[
+  !(trees.df$MetaPhlAn_version == "3.1.0" &
+    trees.df$tree_filename == "mpa_v30_CHOCOPhlAn_201901_species_tree.nwk"), ]
+```
+
+# Extend tip labels with full taxonomy and write trees as `.nwk.bz2`
+
+Older trees store only bare SGB numbers as tip labels (no `k__`/`p__` prefixes).
+For those trees we look up the full MetaPhlAn taxonomy string from `latest_mpa_taxonomy`
+and prepend it, giving every tip label the form:
+`k__Bacteria|...|s__Bacteroides fragilis|t__SGB1234`
+
+All trees are then written as bzip2-compressed Newick files into `inst/extdata/trees/`.
+
+```{r}
+destdir <- "../inst/extdata/trees"
+dir.create(destdir, recursive = TRUE)
+
+# Write each tree as a bzip2-compressed Newick file
+invisible(lapply(names(trees.list), function(filename) {
+  out_path <- sprintf("%s/%s.bz2", destdir, filename)
+  write.tree(phy = trees.list[[filename]], file = bzfile(out_path))
+}))
+
+# Write the directory/manifest table (plain TSV, no row names)
+write.table(
+  trees.df[!duplicated(trees.df$md5sum),][, -1],   # drop filePath — not meaningful after install
+  file      = file.path(destdir, "trees_files_directory.tsv"),
+  sep       = "\t",
+  row.names = FALSE,
+  col.names = TRUE,
+  quote     = FALSE
+)
+```
+
+# Format and write GTDB taxonomy tables as `.tsv.bz2`
+
+GTDB files are identified by the `*GTDB*` glob across all downloaded version folders.
+Duplicates (same md5) are dropped so each unique table is written only once.
+
+The raw GTDB format is a two-column file: SGB | semicolon-delimited taxonomy string.
+We split the taxonomy string into named columns (Domain … Species) and append the SGB
+column, then write the result as a bzip2-compressed TSV.
+
+```{r}
+GTDBs.vec        <- list.files(outdir, pattern = ".*GTDB.*", recursive = TRUE, full.names = TRUE)
+GTDBs.md5sum     <- md5sum(GTDBs.vec)
+GTDBs.split.list <- strsplit(GTDBs.vec, "/")
+
+GTDBs.df <- data.frame(
+  filePath          = GTDBs.vec,
+  GTDB_filename     = basename(GTDBs.vec),
+  MetaPhlAn_version = sapply(GTDBs.split.list, function(x) gsub("MetaPhlAn-", "", x[4], fixed = TRUE)),
+  md5sum            = GTDBs.md5sum
+)
+
+# Keep only one copy of each unique file (by md5)
+GTDBs.df_unique <- GTDBs.df[!duplicated(GTDBs.df$md5sum), ]
+```
+
+```{r}
+# Read each unique GTDB file using its full path (filePath column)
+files_raw <- lapply(GTDBs.df_unique$filePath, read.delim,
+                    col.names = c("SGB", "taxonomy_long"))
+names(files_raw) <- GTDBs.df_unique$GTDB_filename
+
+# Split the semicolon-delimited taxonomy string into one column per rank
+files_clean <- lapply(files_raw, function(x) {
+  ranks <- do.call(rbind, strsplit(x$taxonomy_long, ";"))
+  df    <- cbind.data.frame(ranks, SGB = x$SGB, stringsAsFactors = FALSE)
+  colnames(df) <- c("Domain", "Phylum", "Class", "Order", "Family", "Genus", "Species", "SGB")
+  df
+})
+```
+
+```{r}
+destdir <- "../inst/extdata/GTDB"
+dir.create(destdir, recursive = TRUE)
+
+# Write each table as a bzip2-compressed TSV
+invisible(lapply(names(files_clean), function(filename) {
+  out_path <- file.path(destdir, sub("\\.tsv$", ".tsv.bz2", filename))
+  write.table(
+    files_clean[[filename]],
+    file      = bzfile(out_path),
+    sep       = "\t",
+    row.names = FALSE,
+    quote     = FALSE
+  )
+}))
+
+# Write the manifest (plain TSV — small file, no need to compress)
+write.table(
+  GTDBs.df_unique[, c("GTDB_filename", "md5sum")],
+  file      = file.path(destdir, "GTDB_files_directory.tsv"),
+  sep       = "\t",
+  row.names = FALSE,
+  quote     = FALSE
+)
+```
+
+# sessionInfo
+
+```{r}
+sessionInfo()
+```
