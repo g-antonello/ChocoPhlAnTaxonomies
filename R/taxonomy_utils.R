@@ -1,33 +1,3 @@
-# function that gives full taxonomy separated by |
-
-get_sgb_taxonomy <- function(SGB, taxonomy = "mpa", chocophlan_datestamp = "202403"){
-  
-  # strip t__ in case there is one in the SGB to look up the taxonomy of
-  SGB_lookup <- gsub("t__", "", SGB)
-  
-  # Check the datestamp of the latest taxonomy and the wanted one
-  if(chocophlan_datestamp == mpa_latest$datestamp){
-    warning(sprintf("The taxonomy version requested is not available, using %s", mpa_latest$datestamp))
-    }
-  # use latest mpa taxonomy table to look up the full taxonomy name 
-  if (taxonomy == "mpa") {
-    taxonomy_path <- system.file("extdata", sprintf("%s_speciesTaxonomy.tsv.bz2", mpa_latest), package = "ChocoPhlAn-trees")
-    taxonomy.df <- read.delim(taxonomy_path, header = FALSE)
-      return(paste(taxonomy.df[[2]][taxonomy.df[[1]] == SGB_lookup], paste0("t__", SGB_lookup), sep = "|"))
-    }
-    
-    if(taxonomy == "GTDB"){
-      if(version != "latest")
-        taxonomy_path <- system.file("extdata", "GTDB/mpa_vJan25_CHOCOPhlAnSGB_202503_speciesTaxonomy.tsv.bz2", package = "ChocoPhlAn-trees")
-      taxonomy.df <- read.delim(taxonomy_path, header = FALSE)
-      # The GTDB taxonomy is cleaner, because it's split into Domain, Phylum, ..., Species, SGB
-      # but 
-      return(paste(taxonomy.df[[2]][taxonomy.df[[1]] == SGB_lookup], paste0("t__", SGB_lookup), sep = "|"))
-    }  
-  }
-  
-  
-}
 
 ###############################
 ### OLD FUNCTIONS
