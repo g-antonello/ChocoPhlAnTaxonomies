@@ -34,7 +34,7 @@
 #'   )
 #' }
 
-search_nearest_taxa <- function(phyloTree, target_SGB, taxonomy_sep = "|"){
+search_nearest_taxa <- function(target_SGB, phyloTree, taxonomy_sep = "|"){
 
   # get pariwise distances
   ape_coph_distances <- cophenetic.phylo(phyloTree)

@@ -1,5 +1,5 @@
 ---
-title: "Download and prepare taxonomy files (trees and GTDB taxonomies)"
+title: "Download and prepare taxonomy files (trees and standard_taxonomy taxonomies)"
 author: "Giacomo Antonello"
 date: "2025-12-29"
 output: 
@@ -60,13 +60,13 @@ kable(zenodo_versions_with_doi)
 
 # Download and unzip all versions from 3.0 to the latest (\~ 3 min)
 
-```{r, message=FALSE, eval=interactive()}
+```{r, cache=TRUE, message=FALSE, eval=!interactive()}
 # download sequentially
 for(i in seq_len(nrow(zenodo_versions_with_doi))){
   if(i %% 8 == 0){
     Sys.sleep(30)
   }
-  invisible(download_zenodo(doi = zenodo_versions_with_doi$doi[i], path = file.path(outdir)))
+  download_zenodo(doi = zenodo_versions_with_doi$doi[i], path = file.path(outdir))
 }
 
 # unzip in block
@@ -97,13 +97,14 @@ trees.split.list <- strsplit(trees.vec, "/", fixed = TRUE)
 
 # for each tree, find number of leaves/tips
 
-trees_ape_read <- lapply(trees.vec, read.tree)
+trees.list <- lapply(trees.vec, read.tree)
+names(trees.list) <- basename(trees.vec)
 
 trees.df <- data.frame(
   filePath = trees.vec,
   tree_filename = basename(trees.vec), 
   MetaPhlAn_version = sapply(trees.split.list, function(x) gsub("MetaPhlAn-", "", x[4], fixed = TRUE)),
-  tree_Ntips = sapply(trees_ape_read,  Ntip),
+  tree_Ntips = sapply(trees.list,  Ntip),
   md5sum = trees.md5sum
   )
 
@@ -116,28 +117,11 @@ Manually prune incorrect 3.1.0 tree, the correct one is downloaded from `cmprod`
 trees.df <- trees.df[!(trees.df$MetaPhlAn_version == "3.1.0" & trees.df$tree_filename == "mpa_v30_CHOCOPhlAn_201901_species_tree.nwk"),]
 ```
 
-# Move unique tree files and their map into `inst/extdata`
+# Extend taxonomy and write trees in `.bz2` format into `inst/extdata`
 
 ```{r}
 destdir <- "../inst/extdata/trees"
 dir.create(destdir, recursive = TRUE)
-
-for(i in seq_len(nrow(trees.df))){
-  if(!file.exists(file.path(destdir, trees.df$tree_filename[i]))){
-      file.copy(trees.df$filePath[i], file.path(destdir, trees.df$tree_filename[i]), overwrite = TRUE)
-  }
-}
-
-write.table(trees.df[,-1], file = file.path(destdir, "trees_files_directory.tsv"), sep = "\t", row.names = FALSE, col.names = TRUE, quote = FALSE)
-```
-
-# Format newly copied trees to have tips as complete as possible
-
-```{r}
-phyloTrees.paths <- list.files(destdir, pattern = "*.nwk", full.names = TRUE)
-names(phyloTrees.paths) <- basename(phyloTrees.paths)
-
-trees.list <- lapply(phyloTrees.paths, ape::read.tree)
 
 # taxonomy as vector
 latest_mpa_taxonomy.chr <- paste0(latest_mpa_taxonomy$Taxonomy, "|", "t__", latest_mpa_taxonomy$SGB)
@@ -154,12 +138,17 @@ trees_improved_taxonomy.list <- lapply(trees.list, function(x) {
 }
 )
 
-for(pt in unname(phyloTrees.paths)){
-  write.tree(phy = trees_improved_taxonomy.list[[basename(pt)]], file = pt)
+for(pt in names(trees_improved_taxonomy.list)){
+  write.tree(phy = trees_improved_taxonomy.list[[pt]], file = bzfile(sprintf("%s/%s.bz2", destdir, pt)))
 }
+
+# write all trees found in a map/directory file
+write.table(trees.df[,-1], file = file.path(destdir, "trees_files_directory.tsv"), sep = "\t", row.names = FALSE, col.names = TRUE, quote = FALSE)
 ```
 
-# Copy GTDB files
+# Format and write GTDB tables
+
+Find all GTDB files
 
 ```{r}
 GTDBs.vec <- list.files(outdir, pattern = "*GTDB.*", recursive = TRUE, full.names = TRUE)
@@ -211,6 +200,13 @@ invisible(lapply(names(files_clean), function(filename)
 
 write.table(x = GTDBs.df_unique, file = file.path(destdir, "GTDB_files_directory.tsv"), sep = "\t", row.names = FALSE)
 ```
+
+# Save latest mpa version as variabl
+
+```{r}
+save(mpa_latest, file = file.path("..", "inst", "extdata", "mpa_latest.rda"))
+```
+
 
 # sessionInfo
 
