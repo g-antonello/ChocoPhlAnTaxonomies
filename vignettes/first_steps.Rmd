@@ -1,9 +1,11 @@
 ---
 title: "Basic package usage"
-author: 
-  - name: Giacomo Antonello
-    affiliation: CUNY
-package: ChocoPhlAnTaxonomies
+author:
+  - name: "Giacomo Antonello"
+    affiliation: "CUNY SPH, ISPH"
+    email: "giacomo.antonello@sph.cuny.edu"
+date: "`r BiocStyle::doc_date()`"
+package: "`r BiocStyle::pkg_ver('ChocoPhlAnTaxonomies')`"
 output: 
   BiocStyle::html_document
 vignette: >
