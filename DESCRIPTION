@@ -13,6 +13,8 @@ Authors@R: person("Giacomo", "Antonello",
 URL: https://github.com/g-antonello/ChocoPhlAnTaxonomies
 BugReports: https://github.com/g-antonello/ChocoPhlAnTaxonomies/issues
 biocViews: Software, DataAnnotation, Microbiome, Metagenomics
+Remotes:
+    g-antonello/ChocoPhlAnTaxonomies
 Depends:
     R (>= 4.1.0)
 Imports: 
