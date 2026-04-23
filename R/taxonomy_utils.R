@@ -123,15 +123,28 @@ format_taxonomy <- function(taxonomy.df){
                                      "Species",
                                      "SGB")
   }
+  #-----      End of Case 1                               ----
+  ############################################################
   
+  ############################################################
   # Case 2 - taxonomy is GTDB
+  
   if(ncol(taxonomy.df) > 2){
     # fill unknown taxonomies in GTDB, separate function as it is rather long
-    taxonomy_final.df <- fill_GTDB_unknown_taxonomies(taxonomy.df)
+    taxonomy_final.df <- fill_GTDB_unknown_taxonomies(taxonomy.df)  
   }
   
   # add t__ to SGB column
   taxonomy_final.df$SGB <- paste0("t__", taxonomy_final.df$SGB)
+  
+  # add UNCLASSIFIED row but taking the prefixes of each tax. level
+  # (here i take the first letter of each taxonomic rank and make into a taxonomy)
+  unclassified.df <- data.frame(t(paste0(tolower(substr(colnames(taxonomy_final.df), 1, 1)), "__", "UNCLASSIFIED")))
+  # fix 8th prefix
+  unclassified.df[1,8] <- gsub("s__", "t__", unclassified.df[1,8])
+  colnames(unclassified.df) <- colnames(taxonomy_final.df)
+  
+  taxonomy_final.df <- rbind.data.frame(taxonomy_final.df, unclassified.df)
   
   return(taxonomy_final.df)
 }
@@ -240,7 +253,8 @@ get_SGB_full_taxonomy <- function(SGB, taxonomy = "mpa", chocophlan_datestamp = 
 #'
 #' Swaps the \code{rowData} of a \code{TreeSummarizedExperiment} produced by
 #' MetaPhlAn for the corresponding GTDB taxonomy from the CHOCOPhlAn database.
-#' An \emph{UNCLASSIFIED} row is added automatically if present in the TSE.
+#' Missing taxonomiese from GTDB are incorporated as they are from `mpa`. This
+#' applies only to eukaryotes ("t__EUK...")
 #'
 #' @param data.tse A \code{TreeSummarizedExperiment} whose \code{rowData} uses
 #'   MetaPhlAn taxonomy and whose row names are SGB identifiers in the form
@@ -263,40 +277,28 @@ get_SGB_full_taxonomy <- function(SGB, taxonomy = "mpa", chocophlan_datestamp = 
 #' 
 #' tse_gtdb <- tse_replace_mpa_with_GTDB_taxonomy(JoS_2022.tse, chocophlan_datestamp = "202403")
 #' head(rowData(tse_gtdb))
-
 tse_replace_mpa_with_GTDB_taxonomy <- function(data.tse, chocophlan_datestamp = NULL) {
-  # if a chocophlan datestamp is not provided, try to guess it
-  if(is.null(chocophlan_datestamp)){
-    if("db_version" %in% colnames(colData(data.tse))){
-      chocophlan_datestamp <- sapply(strsplit(unique(colData(data.tse)$db_version), "_"), function(x) x[length(x)])
-    } else{
-      stop("db_version column not found, please provide a value in 
-      chocophlan_datestamp (eg: 202401")
-    }
-  }
   
+  # validate chocophlan datestamp
   chocophlan_datestamp <- validate_chocophlan_version(chocophlan_datestamp)
   
-  taxonomy_path <- grep(
-    chocophlan_datestamp,
-    list.files(system.file("extdata/GTDB_taxonomy", package = "ChocoPhlAnTaxonomies"), full.names = TRUE),
-    value = TRUE
-  )
-  if (length(taxonomy_path) == 0) stop("No GTDB taxonomy file found for version: ", chocophlan_datestamp)
+  # load taxonomy
+  taxonomy.df <- load_taxonomy("GTDB", chocophlan_datestamp)
   
-  taxonomy.df <- read.delim(taxonomy_path)
-  taxonomy.df$SGB <- paste0("t__", taxonomy.df$SGB)
-  
-  # keep missing taxa from origin to ensure all are there in target taxonomy
+  # make sure the new taxonomy table has all features that the old one had.
+  # if not, add them as they are from the old taxonomy
   missing_taxa_in_GTDB.df <- as.data.frame(rowData(data.tse)[rev(setdiff(rownames(data.tse), taxonomy.df$SGB)),])
   # manipulate Kingdom into Domain in 2 steps
   colnames(missing_taxa_in_GTDB.df) <- colnames(taxonomy.df)
   missing_taxa_in_GTDB.df$Domain <- gsub("k__", "d__", missing_taxa_in_GTDB.df$Domain)
   
-  # bind new taxonomy with leftovers of the old one (UNCLASSIFIED and Eukarya)
-  taxonomy.df <- rbind.data.frame(taxonomy.df, missing_taxa_in_GTDB.df)
+  # bind new taxonomy with leftovers of the old one (typically Eukarya)
+  taxonomy_new.df <- rbind.data.frame(taxonomy.df, missing_taxa_in_GTDB.df)
+  # put rownames in the new taxonomy
+  rownames(taxonomy_new.df) <- taxonomy_new.df$SGB
   
-  rowData(data.tse) <- DataFrame(taxonomy.df[rownames(data.tse), ])
+  # replace the old taxonomy with the new one 
+  rowData(data.tse) <- DataFrame(taxonomy_new.df[rownames(data.tse), ])
   return(data.tse)
 }
 
@@ -344,7 +346,7 @@ tse_rename_rownames <- function(data.tse, new.rownames) {
   
   if (!is.null(rowTree(data.tse))) {
     if (!identical(rownames(data.tse), rowTree(data.tse)$tip.label)) {
-      stop(
+      warning(
         "Row names and tree tip labels are not in identical order. ",
         "Consider running `reorder_taxa_with_phyloTree_labels` first."
       )

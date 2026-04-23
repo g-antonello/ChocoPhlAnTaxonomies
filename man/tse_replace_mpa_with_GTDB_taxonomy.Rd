@@ -23,7 +23,8 @@ The input \code{TreeSummarizedExperiment} with \code{rowData}
 \description{
 Swaps the \code{rowData} of a \code{TreeSummarizedExperiment} produced by
 MetaPhlAn for the corresponding GTDB taxonomy from the CHOCOPhlAn database.
-An \emph{UNCLASSIFIED} row is added automatically if present in the TSE.
+Missing taxonomiese from GTDB are incorporated as they are from `mpa`. This
+applies only to eukaryotes ("t__EUK...")
 }
 \examples{
 suppressMessages(library(TreeSummarizedExperiment))
