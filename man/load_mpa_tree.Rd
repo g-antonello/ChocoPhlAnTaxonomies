@@ -18,9 +18,9 @@ available, run the function interactively or read the error message. Default
 is `NULL` to prevent unexpected/unwanted trees being loaded.}
 }
 \value{
-A \code{phylo} object read from the package's
-  \code{extdata/trees/} directory, with tip labels renamed according to
-  the database version.
+A \code{list} object with two elements: `Phylo` and `Version`. The 
+former contains the phylogenetic tree, the latter contains the name of the 
+metaphlan tree loaded without file extensions
 }
 \description{
 Reads the CHOCOPhlAn phylogenetic tree for a given database version and

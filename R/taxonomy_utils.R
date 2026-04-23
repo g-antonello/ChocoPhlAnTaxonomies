@@ -146,6 +146,10 @@ format_taxonomy <- function(taxonomy.df){
   
   taxonomy_final.df <- rbind.data.frame(taxonomy_final.df, unclassified.df)
   
+  # remove _group from SGB. it is anyway present in the original files
+  taxonomy_final.df$SGB <- gsub("_group", "", taxonomy_final.df$SGB, fixed = TRUE)
+  
+  # return formatted object
   return(taxonomy_final.df)
 }
 

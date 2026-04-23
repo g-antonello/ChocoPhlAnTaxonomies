@@ -22,9 +22,9 @@ SGB_TIP_LABEL_VERSION <- 202001L
 #' @importFrom tidytree read.tree keep.tip
 #' @importFrom ape node.depth.edgelength
 #'
-#' @returns A \code{phylo} object read from the package's
-#'   \code{extdata/trees/} directory, with tip labels renamed according to
-#'   the database version.
+#' @returns A \code{list} object with two elements: `Phylo` and `Version`. The 
+#' former contains the phylogenetic tree, the latter contains the name of the 
+#' metaphlan tree loaded without file extensions
 #'
 #' @export
 #'
