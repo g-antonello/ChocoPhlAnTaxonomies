@@ -57,3 +57,4 @@ rsconnect/
 
 # ignore files in the tmp folder
 tmp
+.positai

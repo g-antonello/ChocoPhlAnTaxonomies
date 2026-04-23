@@ -1,207 +1,199 @@
-#' Get SGB taxonomy
-#' 
-#' Given a SGB, it returns a character vector of its full taxonomy
-#' from either the standard metaphlan or the GTDB taxonomy.
-#'  
-#' @param SGB \code{character} of the SGB to get the full taxonomy of
-#' @param taxonomy 
-#' @param chocophlan_datestamp 
+#' Get full taxonomy for a SGB
 #'
-#' @returns
+#' Given a SGB identifier, returns its full pipe-delimited taxonomy string
+#' from either the standard MetaPhlAn (\code{"mpa"}) or GTDB taxonomy for
+#' the requested CHOCOPhlAn database version. The \code{"t__"} prefix is
+#' accepted but not required in \code{SGB}.
+#'
+#' @param SGB A \code{character} string identifying the SGB to look up,
+#'   with or without a \code{"t__"} prefix (e.g. \code{"SGB8271"} or
+#'   \code{"t__SGB8271"}).
+#' @param taxonomy A \code{character} string specifying which taxonomy to
+#'   use. Must be one of \code{"mpa"} (default) or \code{"GTDB"}.
+#' @param chocophlan_datestamp A \code{character} string specifying the
+#'   CHOCOPhlAn database version (e.g. \code{"202403"}, \code{"202307"},
+#'   \code{"latest"}). Validated internally via \code{validate_chocophlan_version()}.
+#'
+#' @returns A \code{character} string containing the full pipe-delimited
+#'   taxonomy for the requested SGB, with the terminal field in the form
+#'   \code{"t__SGB<number>"}.  Returns \code{NA_character_} with a warning
+#'   if the SGB is not found in the taxonomy table.
+#' 
+#' @importFrom utils read.delim
 #' @export
 #'
 #' @examples
-#' # example with GDTB 202403, which shows no difference from 202307
-#' # this is to show the behavior of `validate_mpa_version`.
-#' 
-#' get_sgb_taxonomy("SGB8271", "mpa", chocophlan_datestamp = "202403")
-#' get_sgb_taxonomy("t__SGB8271", "mpa", chocophlan_datestamp = "202403")
-#' get_sgb_taxonomy("SGB8271", "GTDB", chocophlan_datestamp = "202403")
-#' get_sgb_taxonomy("t__SGB8271", "GTDB", chocophlan_datestamp = "202403")
-
-get_sgb_taxonomy <- function(SGB, taxonomy = "mpa", chocophlan_datestamp = "202403"){
-  mpa_latest <- get_mpa_latest()
-  chocophlan_datestamp <- validate_mpa_version(chocophlan_datestamp)
+#' # These are equivalent — the "t__" prefix is stripped automatically
+#' get_SGB_full_taxonomy("SGB8271", "mpa", chocophlan_datestamp = "202403")
+#' get_SGB_full_taxonomy("t__SGB8271", "mpa", chocophlan_datestamp = "202403")
+#'
+#' # GTDB taxonomy
+#' get_SGB_full_taxonomy("SGB8271", "GTDB", chocophlan_datestamp = "202403")
+#' get_SGB_full_taxonomy("t__SGB8271", "GTDB", chocophlan_datestamp = "202403")
+get_SGB_full_taxonomy <- function(SGB, taxonomy = "mpa", chocophlan_datestamp = "202403") {
   
-  # strip t__ in case there is one in the SGB to look up the taxonomy of
+  taxonomy <- match.arg(taxonomy, choices = c("mpa", "GTDB"))
+  
+  if (chocophlan_datestamp == "latest") {
+    chocophlan_datestamp <- get_mpa_latest()$datestamp
+  }
+  chocophlan_datestamp <- validate_chocophlan_version(chocophlan_datestamp)
+  
+  # Strip "t__" prefix so lookups work regardless of input format
   SGB_lookup <- gsub("t__", "", SGB)
   
-  # use latest mpa taxonomy table to look up the full taxonomy name 
   if (taxonomy == "mpa") {
-    # Check the datestamp of the latest taxonomy and the wanted one
-    if(chocophlan_datestamp != mpa_latest$datestamp){
-      warning(sprintf("Taxonomy version '%s' requested, but '%s' is used for lookup", chocophlan_datestamp, mpa_latest$datestamp))
+    taxonomy_path <- grep(
+      chocophlan_datestamp,
+      list.files(system.file("extdata/mpa_taxonomy/", package = "ChocoPhlAnTaxonomies"), full.names = TRUE),
+      value = TRUE
+    )
+    if (length(taxonomy_path) == 0) stop("No mpa taxonomy file found for version: ", chocophlan_datestamp)
+    
+    taxonomy.df <- read.delim(taxonomy_path, header = FALSE)
+    matched_rows <- taxonomy.df[[2]][taxonomy.df[[1]] == SGB_lookup]
+    
+    if (length(matched_rows) == 0) {
+      warning("SGB '", SGB_lookup, "' not found in mpa taxonomy for version ", chocophlan_datestamp)
+      return(NA_character_)
     }
     
-    taxonomy_path <- system.file("extdata", sprintf("%s_speciesTaxonomy.tsv.bz2", mpa_latest$name), package = "ChocoPhlAnTaxonomies")
-    taxonomy.df <- read.delim(taxonomy_path, header = FALSE)
-    SGB_lookedUp <- paste(taxonomy.df[[2]][taxonomy.df[[1]] == SGB_lookup], paste0("t__", SGB_lookup), sep = "|")
+    return(paste(matched_rows, paste0("t__", SGB_lookup), sep = "|"))
+  }
+  
+  if (taxonomy == "GTDB") {
+    taxonomy_path <- grep(
+      chocophlan_datestamp,
+      list.files(system.file("extdata/GTDB/", package = "ChocoPhlAnTaxonomies"), full.names = TRUE),
+      value = TRUE
+    )
+    if (length(taxonomy_path) == 0) stop("No GTDB taxonomy file found for version: ", chocophlan_datestamp)
     
-    return(SGB_lookedUp)
-  }
-  
-  if(taxonomy == "GTDB"){
-    taxonomy_path <- grep(chocophlan_datestamp, list.files(system.file("extdata/GTDB/", package = "ChocoPhlAnTaxonomies"), full.names = TRUE), value = TRUE)
-    # The GTDB taxonomy is cleaner, because it's split into Domain, Phylum, ..., Species, SGB
-    # but
     taxonomy.df <- read.delim(taxonomy_path)
-    SGB_lookedUp <- taxonomy.df[taxonomy.df$SGB == SGB_lookup,]
+    SGB_lookedUp <- taxonomy.df[taxonomy.df$SGB == SGB_lookup, ]
+    
+    if (nrow(SGB_lookedUp) == 0) {
+      warning("SGB '", SGB_lookup, "' not found in GTDB taxonomy for version ", chocophlan_datestamp)
+      return(NA_character_)
+    }
+    
     SGB_lookedUp$SGB <- paste0("t__", SGB_lookedUp$SGB)
-    SGB_lookedUp <- paste(unlist(SGB_lookedUp), collapse = "|")
-    return(SGB_lookedUp)
+    return(paste(unlist(SGB_lookedUp), collapse = "|"))
   }
 }
 
 
-
-
-###############################
-### OLD FUNCTIONS
-###############################
-
-#' Taxonomy from vector to data.frame
-#' 
-#' Expand a character vector of taxonomies into a full taxonomy table based on 
-#' the separator provided and the prefixes at each level. Tested on metaphlan4
-#' output tables
+#' Replace MetaPhlAn taxonomy with GTDB taxonomy in a TreeSummarizedExperiment
 #'
-#' @param taxonomy.chr A \code{character} vector with the taxonomy. They should 
-#' come from a pre-cleaned taxonomy table, such as after `mia::importMetaphlan`
-#' @param sep A \code{character} specifying the separator to use to split 
-#' `taxonomy.chr`
-#' @param row.names Either `'short'`, `'long'`, or `'none'`. Default is 
-#' `'short'`, which returns the highest taxonomic resolution the input 
-#' `taxonomy.chr` has for that row. `'long'` returns `taxonomy.chr` as column 
-#' names. `'none'` returns a data.frame without rown ames
-#
-#' @returns A \code{data.frame} of taxonomies
+#' Swaps the \code{rowData} of a \code{TreeSummarizedExperiment} produced by
+#' MetaPhlAn for the corresponding GTDB taxonomy from the CHOCOPhlAn database.
+#' An \emph{UNCLASSIFIED} row is added automatically if present in the TSE.
+#'
+#' @param data.tse A \code{TreeSummarizedExperiment} whose \code{rowData} uses
+#'   MetaPhlAn taxonomy and whose row names are SGB identifiers in the form
+#'   \code{"t__SGB<number>"} or \code{"UNCLASSIFIED"}.
+#' @param chocophlan_datestamp A \code{character} string specifying the
+#'   CHOCOPhlAn database version to use (e.g. \code{"202403"}, \code{"202307"}).
+#'   Validated internally via \code{validate_chocophlan_version()}.
+#'
+#' @returns The input \code{TreeSummarizedExperiment} with \code{rowData}
+#'   replaced by the GTDB taxonomy table, subset and ordered to match the
+#'   rows of \code{tse}.
+#' @importFrom SummarizedExperiment colData rowData rowData<-
+#' @importFrom S4Vectors DataFrame
+#' @importFrom utils read.delim head
 #' @export
 #'
 #' @examples
-#' example_taxonomies_SGB <- c(
-#'   "k__Bacteria|p__Firmicutes|c__CFGB8118|o__OFGB8118|f__FGB8118|g__GGB29005|s__GGB29005_SGB41723|t__SGB41723",
-#'   "k__Bacteria|p__Firmicutes|c__Clostridia|o__Eubacteriales|f__Lachnospiraceae|g__Lachnospiraceae_unclassified|s__Lachnospiraceae_unclassified_SGB41492|t__SGB41492",
-#'   "k__Bacteria|p__Bacteria_unclassified|c__Bacteria_unclassified|o__Bacteria_unclassified|f__Bacteria_unclassified|g__GGB28904|s__GGB28904_SGB41595|t__SGB41595"
-#' )
+#' suppressMessages(library(TreeSummarizedExperiment))
+#' data("JoS_2022.tse")
 #' 
-#' expand_taxonomy(example_taxonomies_SGB)
-#' 
-#' example_taxonomies_Species <- c(
-#'   "k__Bacteria|p__Firmicutes|c__CFGB8118|o__OFGB8118|f__FGB8118|g__GGB29005|s__GGB29005_SGB41723",
-#'   "k__Bacteria|p__Firmicutes|c__Clostridia|o__Eubacteriales|f__Lachnospiraceae|g__Lachnospiraceae_unclassified|s__Lachnospiraceae_unclassified_SGB41492",
-#'   "k__Bacteria|p__Bacteria_unclassified|c__Bacteria_unclassified|o__Bacteria_unclassified|f__Bacteria_unclassified|g__GGB28904|s__GGB28904_SGB41595"
-#' )
-#' 
-#' expand_taxonomy(example_taxonomies_Species)
+#' tse_gtdb <- tse_replace_mpa_with_GTDB_taxonomy(JoS_2022.tse, chocophlan_datestamp = "202403")
+#' head(rowData(tse_gtdb))
 
-expand_taxonomy <- function(taxonomy.chr, sep = "|", row.names = "short"){
-  
-  taxonomy.list <- strsplit(taxonomy.chr, sep, fixed = TRUE)
-  taxonomy.df <- as.data.frame(Reduce(rbind, taxonomy.list))
-  taxonomies_per_column <- apply(taxonomy.df, 2, function(x) unique(substr(x[!grepl("^UN*", x)], 1, 3)))
-  
-  final_colnames <- all_taxonomy_levels[taxonomies_per_column]
-  
-  colnames(taxonomy.df) <- final_colnames
-  
-  if(row.names == "short"){
-    rownames(taxonomy.df) <- sapply(taxonomy.list, function(x) x[length(x)])
-  } 
-  
-  if(row.names == "long"){
-    rownames(taxonomy.df) <- taxonomy.chr
+tse_replace_mpa_with_GTDB_taxonomy <- function(data.tse, chocophlan_datestamp = NULL) {
+  # if a chocophlan datestamp is not provided, try to guess it
+  if(is.null(chocophlan_datestamp)){
+    if("db_version" %in% colnames(colData(data.tse))){
+      chocophlan_datestamp <- sapply(strsplit(unique(colData(data.tse)$db_version), "_"), function(x) x[length(x)])
+    } else{
+      stop("db_version column not found, please provide a value in 
+      chocophlan_datestamp (eg: 202401")
+    }
   }
   
-  if(row.names == "none"){
-    rownames(taxonomy.df) <- NULL
-  }
+  chocophlan_datestamp <- validate_chocophlan_version(chocophlan_datestamp)
   
-  return(taxonomy.df)
+  taxonomy_path <- grep(
+    chocophlan_datestamp,
+    list.files(system.file("extdata/GTDB/", package = "ChocoPhlAnTaxonomies"), full.names = TRUE),
+    value = TRUE
+  )
+  if (length(taxonomy_path) == 0) stop("No GTDB taxonomy file found for version: ", chocophlan_datestamp)
+  
+  taxonomy.df <- read.delim(taxonomy_path)
+  taxonomy.df$SGB <- paste0("t__", taxonomy.df$SGB)
+  
+  # keep missing taxa from origin to ensure all are there in target taxonomy
+  missing_taxa_in_GTDB.df <- as.data.frame(rowData(data.tse)[rev(setdiff(rownames(data.tse), taxonomy.df$SGB)),])
+  # manipulate Kingdom into Domain in 2 steps
+  colnames(missing_taxa_in_GTDB.df) <- colnames(taxonomy.df)
+  missing_taxa_in_GTDB.df$Domain <- gsub("k__", "d__", missing_taxa_in_GTDB.df$Domain)
+  
+  # bind new taxonomy with leftovers of the old one (UNCLASSIFIED and Eukarya)
+  taxonomy.df <- rbind.data.frame(taxonomy.df, missing_taxa_in_GTDB.df)
+  
+  rowData(data.tse) <- DataFrame(taxonomy.df[rownames(data.tse), ])
+  return(data.tse)
 }
 
-#' Taxonomy from data.frame to vector
-#'
-#' @param taxonomy.df \code{data.frame} with taxonomic levels on columns and 
-#' individual taxa on rows. Taxa levels must be ordered from Kingdom/Domain to 
-#' make sense, but the function does not check that
-#' @param sep \code{character} specifying the separator avoid 
-#' `c("_", "-", " ", ",", "\\t")` separators, because they will likely be 
-#' present in the taxonomy table already or because it would conflict with 
-#' saving the taxonomy table in .csv or .tsv format
-#'
-#' @returns A \code{character} of complete taxonomies separated by `sep`
-#' @export
-#'
-#' @examples
-#' example_taxonomies_Species.chr <- c(
-#' "k__Bacteria|p__Firmicutes|c__CFGB8118|o__OFGB8118|f__FGB8118|g__GGB29005|s__GGB29005_SGB41723",
-#' "k__Bacteria|p__Firmicutes|c__Clostridia|o__Eubacteriales|f__Lachnospiraceae|g__Lachnospiraceae_unclassified|s__Lachnospiraceae_unclassified_SGB41492",
-#' "k__Bacteria|p__Bacteria_unclassified|c__Bacteria_unclassified|o__Bacteria_unclassified|f__Bacteria_unclassified|g__GGB28904|s__GGB28904_SGB41595"
-#' )
-#' 
-#' expanded_taxonomies.df <- expand_taxonomy(example_taxonomies_Species.chr)
-#' 
-#' recollapsed_taxonomies.chr <- collapse_taxonomy(expanded_taxonomies.df)
-#' 
-#' identical(recollapsed_taxonomies.chr, example_taxonomies_Species.chr)
 
-collapse_taxonomy <- function(taxonomy.df, sep = "|"){
-  
-  invalidSeps <- c("_", "-", " ", ",", "\\t")
-  
-  if(sep %in% invalidSeps) {
-    warning(paste0("Please avoid this separator: ", sep))
-  }
-  
-  collapsed_taxonomy <- apply(taxonomy.df, 1, function(x) paste(x, collapse = "|"))
-  names(collapsed_taxonomy) <- NULL
-  return(collapsed_taxonomy)
-  
-}
-
-#' Enhanced row renaming in a TreeSummarizedExperiment 
-#' 
-#' This includes renaming not only rows of a TSE, but renames tree tips as well
+#' Rename rows (and tree tips) of a TreeSummarizedExperiment
 #'
-#' @param data.tse \code{(Tree)SummarizedExperiment} with or without a 
-#' phylogenetic tree
-#' @param new.rownames = A \code{character} vector of new rownames. 
-#' IMPORTANT! Make sure the order of old and new row names makes sense before 
-#' running this function
+#' Renames the rows of a \code{(Tree)SummarizedExperiment}, and if a
+#' \code{rowTree} is present, renames the matching tree tip labels in the
+#' same operation. The new and old row names must be in the same order.
+#'
+#' @param data.tse A \code{(Tree)SummarizedExperiment} with or without a
+#'   phylogenetic tree.
+#' @param new.rownames A \code{character} vector of new row names, the same
+#'   length as \code{nrow(data.tse)} and in the same order as the current
+#'   row names.
 #'
 #' @importFrom TreeSummarizedExperiment rowTree
-#' 
-#' @returns The same \code{TreeSummarizedExperiment}, but with reordered 
-#' rownames of both `assays` and `rowData`
+#'
+#' @returns The input \code{(Tree)SummarizedExperiment} with updated row
+#'   names in both the \code{assays}/\code{rowData} slots and, if present,
+#'   the \code{rowTree} tip labels.
+#'
 #' @export
 #'
 #' @examples
-#' library(mia)
-#' WallenZD_2022.tse <- mia::importMetaPhlAn(
-#' file = system.file("extdata",
-#'                    "WallenZD_2022_metaphlan3_profiles.tsv.bz2",
-#'                    package = "biobakeryUtils"),
-#' col.data = system.file("extdata", "WallenZD_2022_subjMetadata.tsv.bz2", 
-#' package = "biobakeryUtils"))
-#' 
-#' WallenZD_2022_fullLengthNames.tse <- rename_rownames.tse(WallenZD_2022.tse, 
-#' new.rownames = collapse_taxonomy(as.data.frame(rowData(WallenZD_2022.tse))))
-#' 
-#' head(rownames(WallenZD_2022_fullLengthNames.tse))
+#' library(TreeSummarizedExperiment)
+#' data("WallenZD_2022.tse", package = "ChocoPhlAnTaxonomies")
+#'
+#' WallenZD_2022_fullNames.tse <- tse_rename_rownames(
+#'   WallenZD_2022.tse,
+#'   new.rownames = tse_rownames_long(WallenZD_2022.tse))
+#'
+#' head(rownames(WallenZD_2022_fullNames.tse))
 #' head(rownames(WallenZD_2022.tse))
-
-rename_rownames.tse <- function(data.tse, new.rownames){
+tse_rename_rownames <- function(data.tse, new.rownames) {
+  
+  if (length(new.rownames) != nrow(data.tse)) {
+    stop(
+      "`new.rownames` has length ", length(new.rownames),
+      " but `data.tse` has ", nrow(data.tse), " rows."
+    )
+  }
   
   rownames(data.tse) <- new.rownames
   
-  # check that if there is a tree, rownames should be ordered in the same order
-  # as the tip labels of the tree
-  if(!is.null(rowTree(data.tse))) {
+  if (!is.null(rowTree(data.tse))) {
     if (!identical(rownames(data.tse), rowTree(data.tse)$tip.label)) {
       stop(
-        "Your .tse object does not have identical rownames and tip names in 
-        identical order. Consider running `reorder_taxa_with_phyloTree_labels` 
-        first"
+        "Row names and tree tip labels are not in identical order. ",
+        "Consider running `reorder_taxa_with_phyloTree_labels` first."
       )
     }
     rowTree(data.tse)$tip.label <- new.rownames
@@ -210,173 +202,58 @@ rename_rownames.tse <- function(data.tse, new.rownames){
   return(data.tse)
 }
 
-#' Reorder rows and tip labels of a TreeSummarizedExperiment
+
+#' Expand TSE row names to full taxonomy strings
 #'
-#' @param data.tse \code{TreeSummarizedExperiment} object. It must contain a 
-#' phylogenetic tree
+#' Replaces short terminal-node row names (e.g. \code{"t__SGB8271"}) with
+#' full pipe-delimited taxonomy strings built by collapsing all \code{rowData}
+#' columns. Useful when downstream functions require sorting by full taxonomy,
+#' or when full taxonomy labels are wanted on a phylogenetic tree.
 #'
-#' @importFrom TreeSummarizedExperiment rowTree
+#' @param tse A \code{TreeSummarizedExperiment} whose \code{rowData} columns
+#'   contain the taxonomic ranks to be concatenated.
+#'
+#' @returns  \code{character} of full-taxonomy rownames ready to be reassigned 
+#' to the TSE using `tse_rename_rownames()`. IMPORTANT: There are special characters
+#' in the rownames, modeling them will likely silently convert them with 
+#' make.names().
+#'
 #' @importFrom SummarizedExperiment rowData
-#'
-#' @returns \code{TreeSummarizedExperiment} object with identical rownames and 
-#' tip labels order
 #' @export
+#'
+#' @examples
+#' data("WallenZD_2022.tse")
+#' tse_long <- tse_rownames_long(WallenZD_2022.tse)
+#' 
+#' # inspect old vs new rownames
+#' head(rownames(WallenZD_2022.tse))
+#' head(rownames(tse_long))
+tse_rownames_long <- function(tse) {
+  new_rownames <- apply(rowData(tse), 1, function(x) paste(x, collapse = "|"))
+  return(new_rownames)
+}
+
+
+#' Shorten TSE row names to terminal taxonomy identifiers
+#'
+#' Replaces full pipe-delimited taxonomy row names with only the last
+#' pipe-delimited field (e.g. \code{"t__SGB8271"}). This is the inverse of
+#' \code{\link{tse_rownames_long}}.
+#'
+#' @param tse A \code{TreeSummarizedExperiment} whose row names are full
+#'   pipe-delimited taxonomy strings.
+#'
+#' @returns  \code{character} of terminal-only taxonomy rownames ready to be 
+#' reassigned to the TSE using `tse_rename_rownames()`. 
+#'
+#' @export 
 #'
 #' @examples
 #' \dontrun{
-#' # load a tree summarized experiment
-#'  WallenZD_2022.tse <- mia::importMetaPhlAn(
-#'   file = system.file("extdata",
-#'                     "WallenZD_2022_metaphlan3_profiles.tsv.bz2",
-#'                     package = "biobakeryUtils"),
-#'   col.data = system.file("extdata", "WallenZD_2022_subjMetadata.tsv.bz2", 
-#'   package = "biobakeryUtils")
-#'   )
-#'  # Add phylogenetic tree
-#'  
-#'  # shuffle rownames of the 
-#'  
-#'  # check if they are identical to tree tips labels
-#'  
-#'  tse_reordered <- reorder_taxa_with_phyloTree_labels(tse)
+#' tse_short <- tse_rownames_short(tse)
+#' head(rownames(tse_short))
 #' }
-
-reorder_taxa_with_phyloTree_labels <- function(data.tse) {
-  
-  if(is.null(rowTree(data.tse))){
-    stop("No phyloTree to reorder taxa with")
-  }
-  
-  data_reordered.tse <- data.tse[rowTree(data.tse)$tip.label,]
-  return(data_reordered.tse)
-}
-
-rename_features.tse <- function(tse, format = "long"){
-  if(format == "long")
-  rownames(tse) <- collapse_taxonomy(as.data.frame(rowData(tse)))
-}
-
-#' Complete Unknown taxonomy
-#'  
-#' This is a utility function for the `metaphlan_wrangle function`, which needs
-#' it in case it finds taxa that are unique at higher taxonomies levels than the 
-#' one requested (e.g. a Genus without any species mapped to it. maybe it is still 
-#' a valuable genus, so it has to be repeated with the same name at the taxonomic level below).
-#' This is also valuable because another approach would discard it, and the total
-#' relative abundances estimated would not add up.
-#' 
-#' @param x \code{character},  the taxonomy as it appears in the first column 
-#' of a metaphlan table
-#' @param tax_lvl_int \code{character} the level at which the user wants the 
-#' taxonomies aggregated. The default goes all the way to the SGB level (`8`). 
-#' Species level is `7`, Genus is `6` and so on.
-#'
-#' @return \code{character}, the same as the input vector, with the lowest 
-#' taxonomy repeated down to the `tax_lvl_int` chosen
-#' @importFrom tidyr separate_wider_delim
-#' @export
-#'
-#' @examples
-#' 
-#' example_taxonomies <- c(
-#' "k__Bacteria|p__Firmicutes|c__CFGB1347", 
-#' "k__Bacteria|p__Actinobacteria", 
-#' "k__Bacteria|p__Firmicutes|c__Clostridia|o__Eubacteriales|f__Eubacteriales_Family_XIII_Incertae_Sedis|g__Lentihominibacter|s__Lentihominibacter_faecis")
-#' 
-#' # complete taxonomies to species level (level of taxonomic depth)
-#' complete_unknown_taxonomy(example_taxonomies, tax_lvl_int = 7)
-#' 
-
-complete_unknown_taxonomy <- function(x, tax_lvl_int = 8){
-  
-  #input checks 
-  if (!is.character(x)) {
-    stop("Input 'x' must be a character vector.")
-  }
-  
-  if (!is.numeric(tax_lvl_int) || tax_lvl_int < 1 || tax_lvl_int > 8 || tax_lvl_int != round(tax_lvl_int)) {
-    stop("'tax_lvl_int' must be an integer between 1 and 8.")
-  }
-  
-  tmp <- sapply(strsplit(x, "\\|"), function(l) l[length(l)])
-  possible_levels <- c("k__","p__","c__","o__", "f__", "g__", "s__", "t__")[1:tax_lvl_int]
-  latest_taxonomy <- which(grepl(substr(tmp, 1, 3), possible_levels))
-  if(length(latest_taxonomy) == 0){
-    latest_taxonomy <- 0
-    return(paste(rep(tmp, tax_lvl_int), collapse = "|"))
-  } else{
-    return(paste(c(x, rep(tmp, tax_lvl_int - latest_taxonomy)), collapse = "|")) 
-  }
-}
-
-#' Upload full taxonomy data from MetaPhlAn database 
-#'
-#' @param version \code{character} with CHOCOPhlAn database version as found in 
-#' unitn cmprod1 
-#'
-#' @returns \code{data.frame, data.table} object, with columns being `SGB`, 
-#' `Number of alterantive columns`, `list of alternative names`
-#' 
-#' @importFrom data.table fread
-#' @importFrom stringr str_count
-#' @importFrom dplyr mutate
-#' 
-#' @export
-#'
-#' @examples
-#' 
-#' head(get_mpa_full_taxonomy("202403"))
-
-get_mpa_full_taxonomy <- function(version = "202403"){
-  # supported versions cached in inst/extdata
-  versions <- c(
-    "202403" = "mpa_vJun23_CHOCOPhlAnSGB_202403_species.txt.bz2", 
-    "202503" = "mpa_vJan25_CHOCOPhlAnSGB_202503_species.txt.bz2")
-  
-  taxonomy <- fread(system.file("extdata", versions[version], 
-                                            package = "biobakeryUtils"), 
-                                header = FALSE, 
-                                col.names = c("SGB", "Main_TaxName"))
-  
-  taxonomy_annot <- mutate(
-    taxonomy,
-      N_AlternateTaxNames = str_count(taxonomy$Main_TaxName, ","),
-      Alternate_TaxNames = sapply(strsplit(Main_TaxName, ","), 
-                                  function(x) 
-                                    ifelse(length(x) == 1, 
-                                           x, 
-                                           paste(x[2:length(x)], collapse = ",")
-                                           )
-                                  )
-    )
-
-  return(taxonomy_annot)
-  }
-
-#' Find SGB alternate names
-#'
-#' @param SGB_id \code{character} of lenght 1 with SGB code 
-#' @param version \code{character} of date in the format %Y%m that specifies
-#' the CHOCOPhlAn database version
-#'
-#' @returns A \code{character} vector with the alternate names in CHOCOPhlAn
-#' @export
-#' 
-#' @importFrom stringr str_remove
-#' @examples
-#' SGB_with_no_altNames <- get_alternate_SGB_names("t__SGB51429", version = "202403")
-#' SGB_with_no_altNames
-#' 
-#' SGB_with_altNames <- get_alternate_SGB_names("t__SGB13547", version = "202403")
-#' SGB_with_altNames
-
-get_alternate_SGB_names <- function(SGB_id, version = "202403"){
-  # remove leading t__
-  SGB_id_clean <- str_remove(SGB_id, pattern =  "t__")
-    
-  taxonomy <- get_mpa_full_taxonomy(version)
-  
-  altNames <- strsplit(taxonomy$Alternate_TaxNames[taxonomy$SGB == SGB_id_clean], ",")[[1]]
-  names(altNames) <- rep(SGB_id, length(altNames))
-  return(altNames)
+tse_rownames_short <- function(tse) {
+  new_rownames <- sapply(strsplit(rownames(tse), "|", fixed = TRUE), function(x) x[length(x)])
+  return(new_rownames)
 }

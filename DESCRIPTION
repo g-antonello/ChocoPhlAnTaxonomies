@@ -1,23 +1,40 @@
 Package: ChocoPhlAnTaxonomies
 Type: Package
-Title: ChocoPhlAn taxonomies, trees and tables
-Version: 0.1.0
+Title: ChocoPhlAn Taxonomies, Trees and Tables
+Description: A package to manipulate taxonomy and phylogenetic data from several
+    MetaPhlAn and ChocoPhlAn versions. This is a more targeted utility package 
+    that used to be in `g-antonello/ChocoPhlAnTaxonomies`. It provides a uniform and 
+    public source of taxonomy and phylogenetic trees from publicly available 
+    ChocoPhlAn versions.
+Version: 0.5.0
 Authors@R: person("Giacomo", "Antonello",
                   email = "giacomoantonello1@gmail.com",
                   role = c("aut", "cre"))
-Description: A uniform and public source of taxonomy and phylogenetic trees from 
-	publicly available ChocoPhlAn version
+URL: https://github.com/g-antonello/ChocoPhlAnTaxonomies
+BugReports: https://github.com/g-antonello/ChocoPhlAnTaxonomies/issues
+biocViews: Software, DataAnnotation, Microbiome, Metagenomics
 Depends:
     R (>= 4.1.0)
-Imports:
+Imports: 
+    methods,
     ape,
     tidytree,
-    TreeSummarizedExperiment
-Suggests:
-    testthat (>= 3.0.0)
-License: GPL-3 + file LICENSE
+    S4Vectors,
+    SummarizedExperiment,
+    TreeSummarizedExperiment,
+    phytools
+Suggests: 
+    testthat (>= 3.0.0),
+    mia (>= 1.16.0),
+    parkinsonsMetagenomicData (>= 1.0.0),
+    knitr,
+    rmarkdown,
+    zen4R,
+    openxlsx2,
+    biobakeryUtils
+License: MIT + file LICENSE
+VignetteBuilder: knitr
 Encoding: UTF-8
 LazyData: true
 RoxygenNote: 7.3.3
 Config/testthat/edition: 3
-

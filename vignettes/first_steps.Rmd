@@ -1,0 +1,144 @@
+---
+title: "Basic package usage"
+author: 
+  - name: Giacomo Antonello
+    affiliation: CUNY
+package: ChocoPhlAnTaxonomies
+output: 
+  BiocStyle::html_document
+vignette: >
+  %\VignetteIndexEntry{Basic package usage}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+    collapse = TRUE,
+    comment = "#>",
+    fig.width = 6,
+    fig.height = 4,
+    warning = FALSE,
+    message = FALSE
+)
+library(TreeSummarizedExperiment)
+library(ChocoPhlAnTaxonomies)
+```
+
+
+# Validate a ChocoPhlAn version
+
+In order to be able to map the wanted SGB to an available taxonomy file.
+Validation is not tested, it was mostly to allow convergence of the 202403 tree 
+into the 202307 one.
+
+```{r}
+validate_chocophlan_version("202403")
+```
+
+# Find SGB full taxonomy name by taxonomy type and version
+
+```{r}
+get_SGB_full_taxonomy(SGB = "SGB20358", taxonomy = "mpa", chocophlan_datestamp = 202403)
+get_SGB_full_taxonomy(SGB = "SGB20358", taxonomy = "GTDB", chocophlan_datestamp = 202403)
+
+get_SGB_full_taxonomy(SGB = "SGB20358", taxonomy = "mpa", chocophlan_datestamp = "latest")
+get_SGB_full_taxonomy(SGB = "SGB20358", taxonomy = "GTDB", chocophlan_datestamp = "latest")
+
+```
+
+`t__` in front is also supported:
+
+```{r}
+get_SGB_full_taxonomy(SGB = "t__SGB20358", taxonomy = "mpa", chocophlan_datestamp = 202403)
+get_SGB_full_taxonomy(SGB = "t__SGB20358", taxonomy = "GTDB", chocophlan_datestamp = 202403)
+
+get_SGB_full_taxonomy(SGB = "t__SGB20358", taxonomy = "mpa", chocophlan_datestamp = "latest")
+get_SGB_full_taxonomy(SGB = "t__SGB20358", taxonomy = "GTDB", chocophlan_datestamp = "latest")
+```
+
+# Load taxonomy tree into `TreeSummarizedExperiment` object
+
+## Pre-2021 MetaPhlAn data
+
+This is an edge case to show how the 
+
+```{r}
+data("WallenZD_2022.tse")
+
+ # Assuming tse is a TreeSummarizedExperiment without a rowTree
+tse_with_tree <- AddPhyloTree_to_mpa_tse(data.tse = WallenZD_2022.tse, chocophlan_datestamp = "201901", multipleTrees = 1)
+# also allowed, because there are 2 trees available with the same timestamp
+# tse_with_tree <- AddPhyloTree_to_mpa_tse(WallenZD_2022.tse, chocophlan_datestamp = "201901", multipleTrees = 2)
+
+# this is because we know that metaphlan 3.0 was used for these data:
+# https://doi.org/10.1038/s41467-022-34667-x
+
+rowTree(WallenZD_2022.tse)
+rowTree(tse_with_tree)
+```
+
+The tree version gets saved in the `metadata` slot:
+
+```{r}
+tse_with_tree@metadata$PhyloTree
+```
+
+if a custom tree is provided, the function won't try to guess, and will store
+the tree's variable name
+
+```{r}
+tree.list <- load_mpa_tree("201901", multipleTrees = 1)
+
+myCustomTree <- tree.list$Phylo
+
+tse_with_custom_tree <- AddPhyloTree_to_mpa_tse(WallenZD_2022.tse, mpa.tre = myCustomTree, multipleTrees = 1)
+
+tse_with_custom_tree@metadata$PhyloTree
+```
+
+## Post-2021 MetaPhlAn data
+
+```{r}
+data("JoS_2022.tse")
+
+# add the phylogenetic Tree exploiting the colData information in 
+# parkinsonsMetagenomicData
+chocophlan_datestamp <- sapply(strsplit(unique(JoS_2022.tse@colData$db_version), "_"), function(x) x[length(x)])
+
+## add it to the TSE by subsetting it and ensuring UNCLASSIFIED remains
+JoS_2022.tse <- AddPhyloTree_to_mpa_tse(
+  data.tse = JoS_2022.tse,
+  chocophlan_datestamp = chocophlan_datestamp, 
+  multipleTrees = 1)
+
+```
+
+# Replace standard MetaPhlAn taxonomy with GTDB alternative
+
+works from `MetaPhlAn 4` because it assumes SGBs are the tested units
+
+```{r}
+JoS_metaphlan_GTDB.tse <- tse_replace_mpa_with_GTDB_taxonomy(
+  data.tse = JoS_2022.tse, 
+  chocophlan_datestamp = chocophlan_datestamp)
+```
+
+Taxonomy before replacement:
+
+```{r taxonomy_before_replacement}
+rowData(JoS_2022.tse)
+```
+
+Taxonomy after replacement:
+
+```{r taxonomy_after_replacement}
+rowData(JoS_metaphlan_GTDB.tse)
+```
+
+# Session info
+
+```{r session_info}
+sessionInfo()
+```
+
