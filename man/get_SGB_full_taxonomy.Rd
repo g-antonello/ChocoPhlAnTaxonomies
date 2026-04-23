@@ -4,7 +4,7 @@
 \alias{get_SGB_full_taxonomy}
 \title{Get full taxonomy for a SGB}
 \usage{
-get_SGB_full_taxonomy(SGB, taxonomy = "mpa", chocophlan_datestamp = "202403")
+get_SGB_full_taxonomy(SGB, taxonomy = "mpa", chocophlan_datestamp = "latest")
 }
 \arguments{
 \item{SGB}{A \code{character} string identifying the SGB to look up,
@@ -16,7 +16,7 @@ use. Must be one of \code{"mpa"} (default) or \code{"GTDB"}.}
 
 \item{chocophlan_datestamp}{A \code{character} string specifying the
 CHOCOPhlAn database version (e.g. \code{"202403"}, \code{"202307"},
-\code{"latest"}). Validated internally via \code{validate_chocophlan_version()}.}
+Default: \code{"latest"}). Validated internally via \code{validate_chocophlan_version()}.}
 }
 \value{
 A \code{character} string containing the full pipe-delimited
@@ -31,7 +31,7 @@ the requested CHOCOPhlAn database version. The \code{"t__"} prefix is
 accepted but not required in \code{SGB}.
 }
 \examples{
-# These are equivalent — the "t__" prefix is stripped automatically
+# These are equivalent — the "t__" prefix is added automatically
 get_SGB_full_taxonomy("SGB8271", "mpa", chocophlan_datestamp = "202403")
 get_SGB_full_taxonomy("t__SGB8271", "mpa", chocophlan_datestamp = "202403")
 

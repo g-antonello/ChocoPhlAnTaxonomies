@@ -144,7 +144,7 @@ files_clean <- lapply(files_raw, function(x) {
 })
 
 ## ---- Save GTDB files ----
-gtdb_destdir <- "inst/extdata/GTDB"
+gtdb_destdir <- "inst/extdata/GTDB_taxonomy"
 if (!dir.exists(gtdb_destdir)) dir.create(gtdb_destdir, recursive = TRUE)
 
 invisible(lapply(names(files_clean), function(filename) {

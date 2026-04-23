@@ -6,7 +6,7 @@ Description: A package to manipulate taxonomy and phylogenetic data from several
     that used to be in `g-antonello/ChocoPhlAnTaxonomies`. It provides a uniform and 
     public source of taxonomy and phylogenetic trees from publicly available 
     ChocoPhlAn versions.
-Version: 0.5.0
+Version: 0.6.0
 Authors@R: person("Giacomo", "Antonello",
                   email = "giacomoantonello1@gmail.com",
                   role = c("aut", "cre"))
