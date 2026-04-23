@@ -1,0 +1,232 @@
+---
+title: "Searching Phylogenetically Closest Taxa with ChocoPhlAnTaxonomies"
+author:
+  - name: "Giacomo Antonello"
+    affiliation: "CUNY SPH, ISPH"
+    email: "giacomo.antonello@sph.cuny.edu"
+date: "`r BiocStyle::doc_date()`"
+package: "`r BiocStyle::pkg_ver('ChocoPhlAnTaxonomies')`"
+output:
+  BiocStyle::html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+vignette: >
+  %\VignetteIndexEntry{Searching Phylogenetically Closest Taxa with ChocoPhlAnTaxonomies}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse  = TRUE,
+  comment   = "#>",
+  fig.align = "center",
+  message   = FALSE,
+  warning   = FALSE
+)
+```
+
+# Introduction
+
+A common task in microbiome research is to identify taxa that are
+phylogenetically close to a target species or SGB (Species-level Genome Bin).
+This is useful, for example, when a taxon of interest is absent from a dataset
+and you want to find the nearest detectable relatives, or when you want to
+explore the ecological or functional neighborhood of a focal taxon in the
+phylogenetic tree.
+
+`r BiocStyle::Biocpkg("ChocoPhlAnTaxonomies")` provides two complementary
+functions for this purpose:
+
+- `search_nearest_taxa_phylo()` — computes phylogenetic distances from a focal
+  SGB to all other tips in a MetaPhlAn/ChocoPhlAn tree, returning the closest 
+  SGBs phylogenetically first
+- `enrich_search_nearest_taxa_phylo()` — takes the distance vector from the
+  above and joins it with a full taxonomy table (mpa - Standard MetaPhlAn or 
+  GTDB - Genome Taxonomy DataBase), optionally flagging which SGBs are present 
+  in a user-provided `r BiocStyle::Biocpkg("TreeSummarizedExperiment")` object.
+
+This vignette walks through both functions using the bundled `JoS_2022` dataset.
+
+# Setup
+
+```{r load-packages}
+library(ChocoPhlAnTaxonomies)
+library(TreeSummarizedExperiment)
+```
+
+## Load example data
+
+We use the `JoS_2022.tse` dataset bundled with the package, which contains
+metagenomic profiles from the Jordan et al. 2022 cohort. We attach the
+ChocoPhlAn `202403` phylogenetic tree to it using `AddPhyloTree_to_mpa_tse()`.
+
+```{r load-data}
+data(JoS_2022.tse)
+JoS_2022.tse <- AddPhyloTree_to_mpa_tse(JoS_2022.tse, chocophlan_datestamp = "202403")
+JoS_2022.tse
+```
+
+Our focal SGB for the examples below is `t__SGB12137`.
+
+```{r define-target}
+SGB_target <- "t__SGB12137"
+```
+
+# Computing Phylogenetic Distances: `search_nearest_taxa_phylo()`
+
+## Using the tree embedded in the TSE
+
+When you have a `TreeSummarizedExperiment` with an attached phylogenetic tree,
+pass `rowTree()` directly. The distances returned are relative to the full set
+of tips in that tree — in this case the SGBs detected in the `JoS_2022`
+dataset. Because the tree is a subset of the full ChocoPhlAn tree, all SGBs in
+the result will, by definition, be present in the dataset.
+
+```{r dist-rowtree}
+dist_rowtree.vec <- search_nearest_taxa_phylo(SGB_target, rowTree(JoS_2022.tse))
+head(dist_rowtree.vec)
+length(dist_rowtree.vec)
+```
+
+The result is a named numeric vector sorted by increasing phylogenetic distance.
+The self-distance (always 0) is removed, so the vector has one less element
+than the number of tips.
+
+## Using the full ChocoPhlAn reference tree
+
+Passing the full reference tree gives distances to all SGBs in a ChocoPhlAn 
+phylogenetic tree, most of which will not be detected in any single dataset.
+This is the more informative search when you want to explore the full
+phylogenetic neighbourhood of a taxon.
+
+```{r load-full-tree}
+phyloTree.list <- load_mpa_tree("202403")
+```
+
+```{r dist-full-tree}
+dist_fulltree.vec <- search_nearest_taxa_phylo(SGB_target, phyloTree.list$Phylo)
+head(dist_fulltree.vec)
+length(dist_fulltree.vec)
+```
+
+## The `t__` prefix is handled automatically
+
+You can pass the SGB name with or without the `t__` prefix — the function adds
+it if missing:
+
+```{r no-prefix}
+dist_noprefix.vec <- search_nearest_taxa_phylo("SGB12137", phyloTree.list$Phylo)
+identical(dist_fulltree.vec, dist_noprefix.vec)
+```
+
+# Enriching Results with Taxonomy: `enrich_search_nearest_taxa_phylo()`
+
+`enrich_search_nearest_taxa_phylo()` joins the distance vector with a full
+taxonomy table and returns a `data.frame` ready for inspection or export. Two
+taxonomy systems are supported: `"mpa"` (MetaPhlAn-style, includes eukaryotes)
+and `"GTDB"` (prokaryote-focused, GTDB-Tk style).
+
+## Without a TSE — taxonomy and distances only
+
+### mpa taxonomy
+
+```{r enrich-mpa-notse}
+result_mpa <- enrich_search_nearest_taxa_phylo(
+  dist.vec              = dist_fulltree.vec,
+  taxonomy              = "mpa",
+  chocophlan_datestamp  = "202403"
+)
+head(result_mpa)
+```
+
+### GTDB taxonomy
+
+```{r enrich-gtdb-notse}
+result_gtdb <- enrich_search_nearest_taxa_phylo(
+  dist.vec              = dist_fulltree.vec,
+  taxonomy              = "GTDB",
+  chocophlan_datestamp  = "202403"
+)
+head(result_gtdb)
+```
+
+Note that GTDB does not contain eukaryote taxonomy. If your tree includes
+eukaryotic SGBs, a warning will be raised listing those that could not be
+matched — this is expected behaviour, not an error. Use `taxonomy = "mpa"` if
+eukaryotes are relevant to your analysis.
+
+## With a TSE — flagging which SGBs are present in your data
+
+Passing a `TreeSummarizedExperiment` object via the `tse` argument adds a
+logical column indicating whether each SGB in the result is detected in your
+dataset. This makes it straightforward to distinguish between "phylogenetically
+close and present" vs "phylogenetically close but absent" taxa.
+
+### Using the full reference tree + TSE
+
+Here, most SGBs will be absent from the dataset (the full tree has many more
+SGBs than any single study).
+
+```{r enrich-gtdb-tse-full}
+result_gtdb_tse <- enrich_search_nearest_taxa_phylo(
+  dist.vec             = dist_fulltree.vec,
+  taxonomy             = "GTDB",
+  chocophlan_datestamp = "202403",
+  tse                  = JoS_2022.tse
+)
+head(result_gtdb_tse)
+```
+
+The last column is named after the `tse` object you passed (here
+`present_in_JoS_2022.tse`) and contains `TRUE` if the SGB is in
+`rowData(tse)$SGB`, `FALSE` otherwise.
+
+```{r presence-summary}
+table(result_gtdb_tse[[ncol(result_gtdb_tse)]])
+```
+
+### Using the TSE's own tree + TSE
+
+When the tree comes from `rowTree(tse)`, all SGBs in the result are present in
+the dataset by construction:
+
+```{r enrich-gtdb-tse-rowtree}
+result_gtdb_tse_rowtree <- enrich_search_nearest_taxa_phylo(
+  dist.vec             = dist_rowtree.vec,
+  taxonomy             = "GTDB",
+  chocophlan_datestamp = "202403",
+  tse                  = JoS_2022.tse
+)
+head(result_gtdb_tse_rowtree)
+
+# All TRUE, as expected
+table(result_gtdb_tse_rowtree[[ncol(result_gtdb_tse_rowtree)]])
+```
+
+# Practical Tips
+
+**Choosing between the TSE tree and the full reference tree.** Use `rowTree(tse)`
+when you want to rank the taxa already present in your dataset by proximity to
+the target. Use the full reference tree when you want to find the closest known
+relatives regardless of detectability in your study.
+
+**Choosing between mpa and GTDB taxonomy.** mpa taxonomy covers both
+prokaryotes and eukaryotes in the ChocoPhlAn database and uses the `k__`/`s__` 
+prefix convention. GTDB covers only prokaryotes but provides a more up-to-date 
+phylogenomic classification using the `d__`/`s__` convention. If your target SGB 
+is a bacterium or archaeon and you want the most current taxonomy, use `"GTDB"`. 
+If eukaryotes are in your tree or dataset, use `"mpa"`.
+
+**Missing SGBs in the taxonomy.** A warning listing unmatched SGBs is raised
+when some tree tips have no entry in the selected taxonomy file. These SGBs are
+silently dropped from the output `data.frame`. If you need to retain them, see 
+how many were dropped by reading the warning, and inspect 
+`setdiff(names(dist.vec), result$SGB)` after the call.
+
+# Session Info {.unnumbered}
+
+```{r session-info}
+sessionInfo()
+```
