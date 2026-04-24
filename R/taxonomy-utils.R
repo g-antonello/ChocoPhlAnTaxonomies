@@ -301,6 +301,9 @@ tse_replace_mpa_with_GTDB_taxonomy <- function(data.tse, chocophlan_datestamp = 
   # put rownames in the new taxonomy
   rownames(taxonomy_new.df) <- taxonomy_new.df$SGB
   
+  # check that all rownames are there, produce error if not
+  stopifnot(all(rownames(data.tse) %in% rownames(taxonomy_new.df)))
+  
   # replace the old taxonomy with the new one 
   rowData(data.tse) <- DataFrame(taxonomy_new.df[rownames(data.tse), ])
   return(data.tse)
