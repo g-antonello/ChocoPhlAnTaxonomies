@@ -141,13 +141,14 @@ enrich_search_nearest_taxa_phylo <- function(dist.vec, taxonomy = "mta",
   taxonomy_dist.df <- merge(taxonomy.df, dist.df, by = "SGB")
   
   # put SGB back at the end of the data.frame but before the distances
-  taxonomy_dist.df <- taxonomy_dist.df[,c(2:7,1,9)]
+  taxonomy_dist.df <- taxonomy_dist.df[,c(2:8,1,9)]
   
   # if the tse is provided, validate it and add column "present_in_data
   if (!is.null(tse)) {
     if (!inherits(tse, "TreeSummarizedExperiment")) {
       stop("`tse` must be a TreeSummarizedExperiment")
     }
+    
     taxonomy_dist.df[[paste0("present_in_", deparse(substitute(tse)))]] <- 
       taxonomy_dist.df$SGB %in% rowData(tse)$SGB
   }
