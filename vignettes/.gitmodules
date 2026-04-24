@@ -1,3 +1,0 @@
-[submodule "phylophlan"]
-path = metaphlan/utils/phylophlan
-url = https://github.com/biobakery/phylophlan
