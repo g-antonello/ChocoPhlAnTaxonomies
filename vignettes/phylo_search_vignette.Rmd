@@ -85,7 +85,7 @@ dataset. Because the tree is a subset of the full ChocoPhlAn tree, all SGBs in
 the result will, by definition, be present in the dataset.
 
 ```{r dist-rowtree}
-dist_rowtree.vec <- search_nearest_taxa_phylo(SGB_target, rowTree(JoS_2022.tse))
+dist_rowtree.vec <- search_nearest_taxa_phylo(SGB_target, phyloTree = rowTree(JoS_2022.tse))
 head(dist_rowtree.vec)
 length(dist_rowtree.vec)
 ```

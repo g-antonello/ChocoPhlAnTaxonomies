@@ -1,7 +1,7 @@
 # CHOCOPhlAn tree & Genome Taxonomy Database (GTDB) SGB taxonomies organized
 
-This repository aims to collect CHOCOPhlAn versions' trees and genome taxonomy database files 
-with some manual curation in case it is needed. 
+This repository aims to collect CHOCOPhlAn versions' trees and genome taxonomy 
+database files with some manual curation in case it is needed. 
 In brief, the procedure is the following:
 
   - Download all downloadable MetaPhlAn versions from Zenodo

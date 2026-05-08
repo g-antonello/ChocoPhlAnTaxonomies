@@ -27,7 +27,6 @@ library(TreeSummarizedExperiment)
 library(ChocoPhlAnTaxonomies)
 ```
 
-
 # Validate a ChocoPhlAn version
 
 In order to be able to map the wanted SGB to an available taxonomy file.
