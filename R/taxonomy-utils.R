@@ -198,7 +198,7 @@ load_taxonomy <- function(taxonomy = "mpa", chocophlan_datestamp){
 
 #' Get full taxonomy for a SGB
 #'
-#' Given a SGB identifier, returns its full pipe-delimited taxonomy string
+#' Given a SGB identifier, returns its full taxonomy, one element per rank,
 #' from either the standard MetaPhlAn (\code{"mpa"}) or GTDB taxonomy for
 #' the requested CHOCOPhlAn database version. The \code{"t__"} prefix is
 #' accepted but not required in \code{SGB}.
@@ -212,10 +212,13 @@ load_taxonomy <- function(taxonomy = "mpa", chocophlan_datestamp){
 #'   CHOCOPhlAn database version (e.g. \code{"202403"}, \code{"202307"},
 #'   Default: \code{"latest"}). Validated internally via \code{validate_chocophlan_version()}.
 #'
-#' @returns A \code{character} string containing the full pipe-delimited
-#'   taxonomy for the requested SGB, with the terminal field in the form
-#'   \code{"t__SGB<number>"}.  Returns \code{NA_character_} with a warning
-#'   if the SGB is not found in the taxonomy table.
+#' @returns A named \code{character} vector with one element per rank, named
+#'   after the columns of \code{\link{load_taxonomy}} (\code{Kingdom} or
+#'   \code{Domain}, \code{Phylum}, ..., \code{Species}, \code{SGB}); the
+#'   last element is the SGB in the form \code{"t__SGB<number>"}. Use
+#'   \code{paste(x, collapse = "|")} to get a pipe-delimited string. If the
+#'   SGB is not found in the taxonomy table, a warning is raised and the
+#'   looked-up SGB (with the \code{"t__"} prefix) is returned unchanged.
 #' 
 #' @importFrom utils read.delim
 #' @export
@@ -257,15 +260,20 @@ get_SGB_full_taxonomy <- function(SGB, taxonomy = "mpa", chocophlan_datestamp = 
 #'
 #' Swaps the \code{rowData} of a \code{TreeSummarizedExperiment} produced by
 #' MetaPhlAn for the corresponding GTDB taxonomy from the CHOCOPhlAn database.
-#' Missing taxonomiese from GTDB are incorporated as they are from `mpa`. This
-#' applies only to eukaryotes ("t__EUK...")
+#' Merged SGBs named \code{"t__SGB<number>_group"} by MetaPhlAn are matched to
+#' the GTDB entry \code{"t__SGB<number>"}; their row names and \code{SGB}
+#' column keep the \code{"_group"} suffix. Features missing from GTDB are
+#' incorporated as they are from `mpa`. This applies only to eukaryotes
+#' ("t__EUK...")
 #'
 #' @param data.tse A \code{TreeSummarizedExperiment} whose \code{rowData} uses
 #'   MetaPhlAn taxonomy and whose row names are SGB identifiers in the form
-#'   \code{"t__SGB<number>"} or \code{"UNCLASSIFIED"}.
+#'   \code{"t__SGB<number>"}, \code{"t__SGB<number>_group"} or
+#'   \code{"t__UNCLASSIFIED"}.
 #' @param chocophlan_datestamp A \code{character} string specifying the
 #'   CHOCOPhlAn database version to use (e.g. \code{"202403"}, \code{"202307"}).
-#'   Validated internally via \code{validate_chocophlan_version()}.
+#'   Default: \code{"latest"}. Validated internally via
+#'   \code{validate_chocophlan_version()}.
 #'
 #' @returns The input \code{TreeSummarizedExperiment} with \code{rowData}
 #'   replaced by the GTDB taxonomy table, subset and ordered to match the
@@ -281,7 +289,7 @@ get_SGB_full_taxonomy <- function(SGB, taxonomy = "mpa", chocophlan_datestamp = 
 #' 
 #' tse_gtdb <- tse_replace_mpa_with_GTDB_taxonomy(JoS_2022.tse, chocophlan_datestamp = "202403")
 #' head(rowData(tse_gtdb))
-tse_replace_mpa_with_GTDB_taxonomy <- function(data.tse, chocophlan_datestamp = NULL) {
+tse_replace_mpa_with_GTDB_taxonomy <- function(data.tse, chocophlan_datestamp = "latest") {
   
   # validate chocophlan datestamp
   chocophlan_datestamp <- validate_chocophlan_version(chocophlan_datestamp)
@@ -289,23 +297,29 @@ tse_replace_mpa_with_GTDB_taxonomy <- function(data.tse, chocophlan_datestamp = 
   # load taxonomy
   taxonomy.df <- load_taxonomy("GTDB", chocophlan_datestamp)
   
-  # make sure the new taxonomy table has all features that the old one had.
-  # if not, add them as they are from the old taxonomy
-  missing_taxa_in_GTDB.df <- as.data.frame(rowData(data.tse)[rev(setdiff(rownames(data.tse), taxonomy.df$SGB)),])
-  # manipulate Kingdom into Domain in 2 steps
-  colnames(missing_taxa_in_GTDB.df) <- colnames(taxonomy.df)
-  missing_taxa_in_GTDB.df$Domain <- gsub("k__", "d__", missing_taxa_in_GTDB.df$Domain)
-  
-  # bind new taxonomy with leftovers of the old one (typically Eukarya)
-  taxonomy_new.df <- rbind.data.frame(taxonomy.df, missing_taxa_in_GTDB.df)
-  # put rownames in the new taxonomy
-  rownames(taxonomy_new.df) <- taxonomy_new.df$SGB
-  
-  # check that all rownames are there, produce error if not
-  stopifnot(all(rownames(data.tse) %in% rownames(taxonomy_new.df)))
-  
-  # replace the old taxonomy with the new one 
-  rowData(data.tse) <- DataFrame(taxonomy_new.df[rownames(data.tse), ])
+  # match rows to GTDB by SGB. MetaPhlAn names merged SGBs "t__SGB<n>_group",
+  # while the taxonomy tables (see format_taxonomy) list them as "t__SGB<n>"
+  row_ids <- rownames(data.tse)
+  lookup  <- sub("_group$", "", row_ids)
+  found   <- lookup %in% taxonomy.df$SGB
+
+  taxonomy_new.df <- taxonomy.df[match(lookup, taxonomy.df$SGB), , drop = FALSE]
+
+  # features without a GTDB taxonomy (typically eukaryotes, "t__EUK...") keep
+  # their mpa taxonomy, with Kingdom renamed to Domain
+  if (any(!found)) {
+    missing_taxa_in_GTDB.df <- as.data.frame(rowData(data.tse)[!found, , drop = FALSE])
+    colnames(missing_taxa_in_GTDB.df) <- colnames(taxonomy.df)
+    missing_taxa_in_GTDB.df$Domain <- gsub("k__", "d__", missing_taxa_in_GTDB.df$Domain)
+    taxonomy_new.df[!found, ] <- missing_taxa_in_GTDB.df
+  }
+
+  # keep the original identifiers (including "_group") in the SGB column
+  taxonomy_new.df$SGB <- row_ids
+  rownames(taxonomy_new.df) <- row_ids
+
+  # replace the old taxonomy with the new one
+  rowData(data.tse) <- DataFrame(taxonomy_new.df)
   return(data.tse)
 }
 
@@ -349,18 +363,22 @@ tse_rename_rownames <- function(data.tse, new.rownames) {
     )
   }
   
+  old.rownames <- rownames(data.tse)
   rownames(data.tse) <- new.rownames
-  
+
   if (!is.null(rowTree(data.tse))) {
-    if (!identical(rownames(data.tse), rowTree(data.tse)$tip.label)) {
-      warning(
-        "Row names and tree tip labels are not in identical order. ",
-        "Consider running `reorder_taxa_with_phyloTree_labels` first."
+    # rename tips by matching the old row names, so tip order does not matter
+    tips <- rowTree(data.tse)$tip.label
+    new.tips <- new.rownames[match(tips, old.rownames)]
+    if (anyNA(new.tips)) {
+      stop(
+        "Some tree tip labels are not row names of `data.tse`: ",
+        paste(head(tips[is.na(new.tips)]), collapse = ", ")
       )
     }
-    rowTree(data.tse)$tip.label <- new.rownames
+    rowTree(data.tse)$tip.label <- new.tips
   }
-  
+
   return(data.tse)
 }
 

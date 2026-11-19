@@ -4,16 +4,18 @@
 \alias{tse_replace_mpa_with_GTDB_taxonomy}
 \title{Replace MetaPhlAn taxonomy with GTDB taxonomy in a TreeSummarizedExperiment}
 \usage{
-tse_replace_mpa_with_GTDB_taxonomy(data.tse, chocophlan_datestamp = NULL)
+tse_replace_mpa_with_GTDB_taxonomy(data.tse, chocophlan_datestamp = "latest")
 }
 \arguments{
 \item{data.tse}{A \code{TreeSummarizedExperiment} whose \code{rowData} uses
 MetaPhlAn taxonomy and whose row names are SGB identifiers in the form
-\code{"t__SGB<number>"} or \code{"UNCLASSIFIED"}.}
+\code{"t__SGB<number>"}, \code{"t__SGB<number>_group"} or
+\code{"t__UNCLASSIFIED"}.}
 
 \item{chocophlan_datestamp}{A \code{character} string specifying the
 CHOCOPhlAn database version to use (e.g. \code{"202403"}, \code{"202307"}).
-Validated internally via \code{validate_chocophlan_version()}.}
+Default: \code{"latest"}. Validated internally via
+\code{validate_chocophlan_version()}.}
 }
 \value{
 The input \code{TreeSummarizedExperiment} with \code{rowData}
@@ -23,8 +25,11 @@ The input \code{TreeSummarizedExperiment} with \code{rowData}
 \description{
 Swaps the \code{rowData} of a \code{TreeSummarizedExperiment} produced by
 MetaPhlAn for the corresponding GTDB taxonomy from the CHOCOPhlAn database.
-Missing taxonomiese from GTDB are incorporated as they are from `mpa`. This
-applies only to eukaryotes ("t__EUK...")
+Merged SGBs named \code{"t__SGB<number>_group"} by MetaPhlAn are matched to
+the GTDB entry \code{"t__SGB<number>"}; their row names and \code{SGB}
+column keep the \code{"_group"} suffix. Features missing from GTDB are
+incorporated as they are from `mpa`. This applies only to eukaryotes
+("t__EUK...")
 }
 \examples{
 suppressMessages(library(TreeSummarizedExperiment))

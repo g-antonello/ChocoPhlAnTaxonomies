@@ -41,17 +41,14 @@ search_nearest_taxa_phylo <- function(SGB_target, phyloTree){
     stop("SGB not found in `phyloTree` tip labels")
   }
 
-  if(!(SGB_target %in% phyloTree$tip.label)){
-    stop("SGB not found in `phyloTree` tip labels")
-  }
-  
   # get all distances from target as a named numeric vector
   ape_coph_distances <- castor::get_all_distances_to_tip(phyloTree, SGB_target)
   ape_coph_distances <- ape_coph_distances[seq_along(phyloTree$tip.label)]
   names(ape_coph_distances) <- phyloTree$tip.label
   
-  # remove the self-comparison
-  ape_coph_distances_no_target <- sort(ape_coph_distances[!grepl(SGB_target, names(ape_coph_distances))])
+  # remove the self-comparison (exact match: a regex would also drop e.g.
+  # t__SGB19xxx when the target is t__SGB19)
+  ape_coph_distances_no_target <- sort(ape_coph_distances[names(ape_coph_distances) != SGB_target])
   
   # return the vector
   return(ape_coph_distances_no_target)
@@ -111,7 +108,7 @@ search_nearest_taxa_phylo <- function(SGB_target, phyloTree){
 #'    chocophlan_datestamp = "202403", tse = JoS_2022.tse))
 #' 
 #' @export
-enrich_search_nearest_taxa_phylo <- function(dist.vec, taxonomy = "mta", 
+enrich_search_nearest_taxa_phylo <- function(dist.vec, taxonomy = "mpa",
                                              chocophlan_datestamp, tse = NULL){
   # first validate the version
   chocophlan_datestamp <- validate_chocophlan_version(chocophlan_datestamp)
