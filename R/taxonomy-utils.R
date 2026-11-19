@@ -353,18 +353,22 @@ tse_rename_rownames <- function(data.tse, new.rownames) {
     )
   }
   
+  old.rownames <- rownames(data.tse)
   rownames(data.tse) <- new.rownames
-  
+
   if (!is.null(rowTree(data.tse))) {
-    if (!identical(rownames(data.tse), rowTree(data.tse)$tip.label)) {
-      warning(
-        "Row names and tree tip labels are not in identical order. ",
-        "Consider running `reorder_taxa_with_phyloTree_labels` first."
+    # rename tips by matching the old row names, so tip order does not matter
+    tips <- rowTree(data.tse)$tip.label
+    new.tips <- new.rownames[match(tips, old.rownames)]
+    if (anyNA(new.tips)) {
+      stop(
+        "Some tree tip labels are not row names of `data.tse`: ",
+        paste(head(tips[is.na(new.tips)]), collapse = ", ")
       )
     }
-    rowTree(data.tse)$tip.label <- new.rownames
+    rowTree(data.tse)$tip.label <- new.tips
   }
-  
+
   return(data.tse)
 }
 
