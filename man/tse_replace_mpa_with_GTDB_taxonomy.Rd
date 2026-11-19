@@ -4,7 +4,7 @@
 \alias{tse_replace_mpa_with_GTDB_taxonomy}
 \title{Replace MetaPhlAn taxonomy with GTDB taxonomy in a TreeSummarizedExperiment}
 \usage{
-tse_replace_mpa_with_GTDB_taxonomy(data.tse, chocophlan_datestamp = NULL)
+tse_replace_mpa_with_GTDB_taxonomy(data.tse, chocophlan_datestamp = "latest")
 }
 \arguments{
 \item{data.tse}{A \code{TreeSummarizedExperiment} whose \code{rowData} uses
@@ -13,7 +13,8 @@ MetaPhlAn taxonomy and whose row names are SGB identifiers in the form
 
 \item{chocophlan_datestamp}{A \code{character} string specifying the
 CHOCOPhlAn database version to use (e.g. \code{"202403"}, \code{"202307"}).
-Validated internally via \code{validate_chocophlan_version()}.}
+Default: \code{"latest"}. Validated internally via
+\code{validate_chocophlan_version()}.}
 }
 \value{
 The input \code{TreeSummarizedExperiment} with \code{rowData}

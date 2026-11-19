@@ -268,7 +268,8 @@ get_SGB_full_taxonomy <- function(SGB, taxonomy = "mpa", chocophlan_datestamp = 
 #'   \code{"t__SGB<number>"} or \code{"UNCLASSIFIED"}.
 #' @param chocophlan_datestamp A \code{character} string specifying the
 #'   CHOCOPhlAn database version to use (e.g. \code{"202403"}, \code{"202307"}).
-#'   Validated internally via \code{validate_chocophlan_version()}.
+#'   Default: \code{"latest"}. Validated internally via
+#'   \code{validate_chocophlan_version()}.
 #'
 #' @returns The input \code{TreeSummarizedExperiment} with \code{rowData}
 #'   replaced by the GTDB taxonomy table, subset and ordered to match the
@@ -284,7 +285,7 @@ get_SGB_full_taxonomy <- function(SGB, taxonomy = "mpa", chocophlan_datestamp = 
 #' 
 #' tse_gtdb <- tse_replace_mpa_with_GTDB_taxonomy(JoS_2022.tse, chocophlan_datestamp = "202403")
 #' head(rowData(tse_gtdb))
-tse_replace_mpa_with_GTDB_taxonomy <- function(data.tse, chocophlan_datestamp = NULL) {
+tse_replace_mpa_with_GTDB_taxonomy <- function(data.tse, chocophlan_datestamp = "latest") {
   
   # validate chocophlan datestamp
   chocophlan_datestamp <- validate_chocophlan_version(chocophlan_datestamp)
