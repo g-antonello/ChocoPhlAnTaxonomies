@@ -130,6 +130,9 @@ load_mpa_tree <- function(chocophlan_datestamp, multipleTrees = NULL) {
 #'   \item If exactly one row name matches \code{"UNCLASSIFIED"}, appends a
 #'     tip at the root with an edge length equal to the maximum node depth
 #'     of the tree.
+#'   \item Relabels the tip \code{"t__SGB<number>"} as
+#'     \code{"t__SGB<number>_group"} when the data use MetaPhlAn's
+#'     \code{"_group"} name for that SGB, so merged SGBs are kept.
 #'   \item Prunes the tree to keep only tips present in
 #'     \code{rownames(data.tse)}, erroring if there is no overlap.
 #'   \item Reorders \code{data.tse} rows to match the pruned tip order.
@@ -208,6 +211,13 @@ AddPhyloTree_to_mpa_tse <- function(data.tse, mpa.tre = NULL, chocophlan_datesta
     )
   }
   
+  # MetaPhlAn names merged SGBs "t__SGB<n>_group", while the tree tip is
+  # "t__SGB<n>": relabel those tips with the row name so they are kept
+  group_rows <- grep("_group$", rownames(data.tse), value = TRUE)
+  group_base <- sub("_group$", "", group_rows)
+  relabel    <- group_base %in% mpa.tre$tip.label & !(group_base %in% rownames(data.tse))
+  mpa.tre$tip.label[match(group_base[relabel], mpa.tre$tip.label)] <- group_rows[relabel]
+
   # Restrict the tree to the SGBs found in the dataset
   relevant_tips <- intersect(mpa.tre$tip.label, rownames(data.tse))
   if (length(relevant_tips) == 0) {

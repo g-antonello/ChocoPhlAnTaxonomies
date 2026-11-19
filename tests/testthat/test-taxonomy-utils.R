@@ -93,13 +93,32 @@ test_that("tse_replace_mpa_with_GTDB_taxonomy swaps rowData and keeps rows", {
   expect_equal(rd["t__SGB4933", "Species"], "s__Agathobacter rectalis")
 })
 
-test_that("known issue: _group SGBs keep their mpa taxonomy in tse_replace_mpa_with_GTDB_taxonomy", {
-  skip("Known issue: rownames like 't__SGB8059_group' are not matched to GTDB 'SGB8059' (format_taxonomy strips '_group')")
+test_that("tse_replace_mpa_with_GTDB_taxonomy matches _group SGBs to GTDB", {
   data("JoS_2022.tse", package = "ChocoPhlAnTaxonomies", envir = environment())
   gtdb.tse <- tse_replace_mpa_with_GTDB_taxonomy(JoS_2022.tse, chocophlan_datestamp = "202403")
   gtdb <- load_taxonomy("GTDB", "202403")
-  expect_equal(SummarizedExperiment::rowData(gtdb.tse)["t__SGB8059_group", "Species"],
-               gtdb$Species[gtdb$SGB == "t__SGB8059"])
+  rd <- SummarizedExperiment::rowData(gtdb.tse)
+
+  expect_equal(rd["t__SGB8059_group", "Species"], gtdb$Species[gtdb$SGB == "t__SGB8059"])
+  expect_equal(rd["t__SGB17167_group", "Species"], "s__Pauljensenia sp000278725")
+
+  group_rows <- grep("_group$", rownames(JoS_2022.tse), value = TRUE)
+  expect_gt(length(group_rows), 0)
+  expect_equal(rd[group_rows, "Species"],
+               gtdb$Species[match(sub("_group$", "", group_rows), gtdb$SGB)])
+  # identifiers keep the suffix
+  expect_equal(rd[group_rows, "SGB"], group_rows)
+})
+
+test_that("tse_replace_mpa_with_GTDB_taxonomy keeps mpa taxonomy for features missing from GTDB", {
+  data("JoS_2022.tse", package = "ChocoPhlAnTaxonomies", envir = environment())
+  gtdb.tse <- tse_replace_mpa_with_GTDB_taxonomy(JoS_2022.tse, chocophlan_datestamp = "202403")
+  euk <- grep("^t__EUK", rownames(JoS_2022.tse), value = TRUE)
+  expect_gt(length(euk), 0)
+  rd_old <- SummarizedExperiment::rowData(JoS_2022.tse)[euk, ]
+  rd_new <- SummarizedExperiment::rowData(gtdb.tse)[euk, ]
+  expect_equal(rd_new$Species, rd_old$Species)
+  expect_equal(rd_new$Domain, sub("k__", "d__", rd_old$Kingdom))
 })
 
 test_that("tse_rownames_long and tse_rownames_short round-trip", {

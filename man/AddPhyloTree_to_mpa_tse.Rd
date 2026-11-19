@@ -59,6 +59,9 @@ Processing steps:
   \item If exactly one row name matches \code{"UNCLASSIFIED"}, appends a
     tip at the root with an edge length equal to the maximum node depth
     of the tree.
+  \item Relabels the tip \code{"t__SGB<number>"} as
+    \code{"t__SGB<number>_group"} when the data use MetaPhlAn's
+    \code{"_group"} name for that SGB, so merged SGBs are kept.
   \item Prunes the tree to keep only tips present in
     \code{rownames(data.tse)}, erroring if there is no overlap.
   \item Reorders \code{data.tse} rows to match the pruned tip order.

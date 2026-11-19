@@ -65,9 +65,18 @@ test_that("AddPhyloTree_to_mpa_tse validates its input", {
                "No overlap")
 })
 
-test_that("known issue: AddPhyloTree_to_mpa_tse drops _group SGBs", {
-  skip("Known issue: rownames like 't__SGB8059_group' do not match tree tip 't__SGB8059' and are silently dropped")
+test_that("AddPhyloTree_to_mpa_tse keeps _group SGBs and drops only features absent from the tree", {
   data("JoS_2022.tse", package = "ChocoPhlAnTaxonomies", envir = environment())
   tree.tse <- AddPhyloTree_to_mpa_tse(JoS_2022.tse, chocophlan_datestamp = "202403")
-  expect_true("t__SGB8059_group" %in% rownames(tree.tse))
+  tips <- TreeSummarizedExperiment::rowTree(tree.tse)$tip.label
+
+  group_rows <- grep("_group$", rownames(JoS_2022.tse), value = TRUE)
+  expect_gt(length(group_rows), 0)
+  expect_true(all(group_rows %in% rownames(tree.tse)))
+  expect_true(all(group_rows %in% tips))
+  expect_equal(rownames(tree.tse), tips)
+
+  # the only rows dropped are eukaryotes, which are not in the SGB tree
+  dropped <- setdiff(rownames(JoS_2022.tse), rownames(tree.tse))
+  expect_true(all(startsWith(dropped, "t__EUK")))
 })
