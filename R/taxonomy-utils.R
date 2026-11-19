@@ -198,7 +198,7 @@ load_taxonomy <- function(taxonomy = "mpa", chocophlan_datestamp){
 
 #' Get full taxonomy for a SGB
 #'
-#' Given a SGB identifier, returns its full pipe-delimited taxonomy string
+#' Given a SGB identifier, returns its full taxonomy, one element per rank,
 #' from either the standard MetaPhlAn (\code{"mpa"}) or GTDB taxonomy for
 #' the requested CHOCOPhlAn database version. The \code{"t__"} prefix is
 #' accepted but not required in \code{SGB}.
@@ -212,10 +212,13 @@ load_taxonomy <- function(taxonomy = "mpa", chocophlan_datestamp){
 #'   CHOCOPhlAn database version (e.g. \code{"202403"}, \code{"202307"},
 #'   Default: \code{"latest"}). Validated internally via \code{validate_chocophlan_version()}.
 #'
-#' @returns A \code{character} string containing the full pipe-delimited
-#'   taxonomy for the requested SGB, with the terminal field in the form
-#'   \code{"t__SGB<number>"}.  Returns \code{NA_character_} with a warning
-#'   if the SGB is not found in the taxonomy table.
+#' @returns A named \code{character} vector with one element per rank, named
+#'   after the columns of \code{\link{load_taxonomy}} (\code{Kingdom} or
+#'   \code{Domain}, \code{Phylum}, ..., \code{Species}, \code{SGB}); the
+#'   last element is the SGB in the form \code{"t__SGB<number>"}. Use
+#'   \code{paste(x, collapse = "|")} to get a pipe-delimited string. If the
+#'   SGB is not found in the taxonomy table, a warning is raised and the
+#'   looked-up SGB (with the \code{"t__"} prefix) is returned unchanged.
 #' 
 #' @importFrom utils read.delim
 #' @export
