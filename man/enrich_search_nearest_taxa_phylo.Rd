@@ -6,7 +6,7 @@
 \usage{
 enrich_search_nearest_taxa_phylo(
   dist.vec,
-  taxonomy = "mta",
+  taxonomy = "mpa",
   chocophlan_datestamp,
   tse = NULL
 )

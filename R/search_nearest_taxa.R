@@ -108,7 +108,7 @@ search_nearest_taxa_phylo <- function(SGB_target, phyloTree){
 #'    chocophlan_datestamp = "202403", tse = JoS_2022.tse))
 #' 
 #' @export
-enrich_search_nearest_taxa_phylo <- function(dist.vec, taxonomy = "mta", 
+enrich_search_nearest_taxa_phylo <- function(dist.vec, taxonomy = "mpa",
                                              chocophlan_datestamp, tse = NULL){
   # first validate the version
   chocophlan_datestamp <- validate_chocophlan_version(chocophlan_datestamp)
